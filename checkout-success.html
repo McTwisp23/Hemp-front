@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Pedido confirmado - HEMP Store</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body data-site="store">
+<header class="header">
+  <div class="headerTop">
+    <div class="container headerTop__inner">
+<div class="headerTop__actions">
+        <button class="langbtn" id="langBtn" type="button" aria-label="Language selector">
+          <span class="langbtn__flag">🇧🇷</span>
+          <span class="langbtn__code">PT</span>
+          <span class="langbtn__chev">▾</span>
+        </button>
+        <div id="authArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="headerMain">
+    <div class="container headerMain__inner">
+      <a class="brand" href="index.html" aria-label="HEMP Store">
+        <span class="brand__name">HEMP</span>
+        <span class="brand__name brand__name--light">Store</span>
+      </a>
+
+      <nav class="nav nav--main" aria-label="Navegação principal">
+        <a class="nav__link" href="index.html" data-i18n="home"></a>
+        <a class="nav__link" href="produtos.html" data-i18n="products"></a>
+        <a class="nav__link" href="hemp-oil-company.html" data-i18n="company"></a>
+        <span class="nav__item nav__item--cart">
+          <a class="nav__link nav__link--active nav__link--cart" href="carrinho.html" aria-label="Carrinho">
+            <svg class="icon icon--cart" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6h15l-1.6 8.2a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.2 3.8H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4ZM17.5 20a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <span class="badge badge--nav" id="cartBadge">0</span>
+        </span>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <section class="container">
+    <div id="checkoutResultPage"></div>
+  </section>
+</main>
+
+<div class="modal" id="langModal">
+  <div class="sheet">
+    <div class="sheet__head">
+      <div class="sheet__title" data-i18n="language">Language</div>
+      <button class="sheet__close" id="langClose" data-i18n="ok">OK</button>
+    </div>
+    <div class="wheel" id="langWheel"></div>
+  </div>
+</div>
+
+<footer class="footerX footerX--minimal" id="siteFooter">
+  <div class="container footerX__shell">
+    <div class="footerX__top">
+      <div class="footerX__brandSimple">
+        <div class="footerX__name" id="footerBrand">HEMP Store</div>
+        <div class="footerX__desc" id="footerDesc" data-i18n="footer_desc_store"></div>
+      </div>
+      <nav class="footerX__nav" id="footerNav" aria-label="Footer navigation">
+        <a href="index.html" data-i18n="home">Home</a>
+        <a href="produtos.html" data-i18n="products">Produtos</a>
+        <a href="carrinho.html" data-i18n="cart">Carrinho</a>
+        <a href="login.html" data-i18n="login">Login</a>
+      </nav>
+    </div>
+    <div class="footerX__bottomSimple">
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    try{
+      const LS = { cartKey:"hemp_cart" };
+      localStorage.removeItem(LS.cartKey);
+    }catch(e){}
+    const params = new URLSearchParams(location.search);
+    const orderId = params.get("orderId") || "";
+    const root = document.getElementById("checkoutResultPage");
+    if(root){
+      root.innerHTML = `
+        <div class="cardform">
+          <h2 style="margin:0 0 8px">Pedido confirmado</h2>
+          <p class="small">Obrigado! Seu pedido foi registrado${orderId ? `: <strong>${orderId}</strong>` : "."}</p>
+          <div class="hr"></div>
+          <a class="btn btn--primary" href="minhas-compras.html">Ver minhas compras</a>
+          <a class="btn btn--ghost" style="margin-left:8px" href="index.html">Voltar</a>
+        </div>
+      `;
+    }
+  })();
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

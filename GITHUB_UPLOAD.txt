@@ -1,0 +1,8 @@
+COMO ENVIAR PARA O GITHUB
+
+1. Descompacte este ZIP.
+2. Envie para o GitHub os arquivos de dentro da pasta, não o ZIP fechado.
+3. O arquivo index.html deve ficar na raiz do repositório.
+4. Para GitHub Pages: Settings > Pages > Deploy from branch > main > /root.
+
+Esta versão foi reduzida para upload mais fácil: assets não utilizados foram removidos e o vídeo foi otimizado.

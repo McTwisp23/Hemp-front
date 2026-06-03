@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>HEMP Store</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body data-site="store">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="headerTop">
+    <div class="container headerTop__inner">
+<div class="headerTop__actions">
+        <button class="langbtn" id="langBtn" type="button" aria-label="Language selector">
+          <span class="langbtn__flag">🇧🇷</span>
+          <span class="langbtn__code">PT</span>
+          <span class="langbtn__chev">▾</span>
+        </button>
+        <div id="authArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="headerMain">
+    <div class="container headerMain__inner">
+      <a class="brand" href="index.html" aria-label="HEMP Store">
+        <span class="brand__name">HEMP</span>
+        <span class="brand__name brand__name--light">Store</span>
+      </a>
+
+      <nav class="nav nav--main" aria-label="Navegação principal">
+        <a class="nav__link nav__link--active" href="index.html" data-i18n="home"></a>
+        <a class="nav__link" href="produtos.html" data-i18n="products"></a>
+        <a class="nav__link" href="hemp-oil-company.html" data-i18n="company"></a>
+        <span class="nav__item nav__item--cart">
+          <a class="nav__link nav__link--cart" href="carrinho.html" aria-label="Carrinho"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.2 6.5h15l-1.6 8.2a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.2 3.8H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only" data-i18n="cart"></span></a>
+          <span class="badge badge--nav" id="cartBadge">0</span>
+        </span>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+
+  <!-- HOME PROMO PRINCIPAL -->
+  <section class="homePromo" aria-label="Promoções e produtos em destaque">
+    <div class="container">
+      <div class="homePromoCard" id="homePromoCarousel">
+        <button class="homePromoCard__btn homePromoCard__btn--prev" id="homePromoPrev" type="button" aria-label="Promoção anterior">‹</button>
+        <div class="homePromoCard__slides" id="homePromoSlides"></div>
+        <button class="homePromoCard__btn homePromoCard__btn--next" id="homePromoNext" type="button" aria-label="Próxima promoção">›</button>
+        <div class="homePromoCard__dots" id="homePromoDots" aria-label="Navegação dos destaques"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED PRODUCTS -->
+  <section class="featured">
+    <div class="container">
+      <h2 class="section-title" data-i18n="featured"></h2>
+      <!-- Featured products (static, rotates on each visit) -->
+      <div class="grid grid--3" id="featuredGrid" aria-label="Featured products"></div>
+    </div>
+  </section>
+
+
+  <!-- CANNABINOIDS -->
+  <section class="cannabinoids" id="cannabinoids">
+    <div class="container">
+      <h2 class="section-title" data-i18n="cannabinoids_title"></h2>
+<div class="grid grid--3 cannabinoids__grid" aria-label="Cannabinoids">
+        <div class="cannaCard">
+          <h3 class="cannaCard__title" data-i18n="cann_cbd_title"></h3>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_props"></strong> <span data-i18n="cann_cbd_props"></span></p>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_studied"></strong> <span data-i18n="cann_cbd_studied"></span></p>
+          <details class="cannaCard__more">
+            <summary data-i18n="learn_more"></summary>
+            <p class="cannaCard__p" data-i18n="cann_cbd_more"></p>
+          </details>
+        </div>
+
+        <div class="cannaCard">
+          <h3 class="cannaCard__title" data-i18n="cann_thc_title"></h3>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_props"></strong> <span data-i18n="cann_thc_props"></span></p>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_studied"></strong> <span data-i18n="cann_thc_studied"></span></p>
+          <details class="cannaCard__more">
+            <summary data-i18n="learn_more"></summary>
+            <p class="cannaCard__p" data-i18n="cann_thc_more"></p>
+          </details>
+        </div>
+
+        <div class="cannaCard">
+          <h3 class="cannaCard__title" data-i18n="cann_cbg_title"></h3>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_props"></strong> <span data-i18n="cann_cbg_props"></span></p>
+          <p class="cannaCard__p"><strong data-i18n="cann_label_studied"></strong> <span data-i18n="cann_cbg_studied"></span></p>
+          <details class="cannaCard__more">
+            <summary data-i18n="learn_more"></summary>
+            <p class="cannaCard__p" data-i18n="cann_cbg_more"></p>
+          </details>
+        </div>
+      </div>
+
+      <p class="cannaCard__note" data-i18n="cann_note"></p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footerX footerX--minimal" id="siteFooter">
+  <div class="container footerX__shell">
+    <div class="footerX__top">
+      <div class="footerX__brandSimple">
+        <div class="footerX__name" id="footerBrand">HEMP Store</div>
+        <div class="footerX__desc" id="footerDesc" data-i18n="footer_desc_store"></div>
+      </div>
+      <nav class="footerX__nav" id="footerNav" aria-label="Footer navigation">
+        <a href="index.html" data-i18n="home">Home</a>
+        <a href="produtos.html" data-i18n="products">Produtos</a>
+        <a href="carrinho.html" data-i18n="cart">Carrinho</a>
+        <a href="login.html" data-i18n="login">Login</a>
+      </nav>
+    </div>
+    <div class="footerX__bottomSimple">
+    </div>
+  </div>
+</footer>
+
+</main>
+
+<!-- LANGUAGE MODAL (iPhone-style wheel) -->
+<div class="modal" id="langModal" aria-hidden="true">
+  <div class="sheet">
+    <div class="sheet__head">
+      <div class="sheet__title" data-i18n="language">Language</div>
+      <button class="sheet__close" id="langClose" data-i18n="ok">OK</button>
+    </div>
+    <div class="wheel" id="langWheel"></div>
+  </div>
+</div>
+
+<!-- SCRIPT -->
+<script src="app.js"></script>
+</body>
+</html>

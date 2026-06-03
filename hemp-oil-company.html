@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Hemp Oil Company S.A.</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body data-site="hoc">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="headerTop">
+    <div class="container headerTop__inner">
+<div class="headerTop__actions">
+        <button class="langbtn" id="langBtn" type="button" aria-label="Language selector">
+          <span class="langbtn__flag">🇧🇷</span>
+          <span class="langbtn__code">PT</span>
+          <span class="langbtn__chev">▾</span>
+        </button>
+        <div id="authArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="headerMain">
+    <div class="container headerMain__inner">
+      <a class="brand" href="index.html" aria-label="HEMP Store">
+        <span class="brand__name">HEMP</span>
+        <span class="brand__name brand__name--light">Store</span>
+      </a>
+
+      <nav class="nav nav--main" aria-label="Navegação principal">
+        <a class="nav__link" href="index.html" data-i18n="home"></a>
+        <a class="nav__link" href="produtos.html" data-i18n="products"></a>
+        <a class="nav__link nav__link--active" href="hemp-oil-company.html" data-i18n="company"></a>
+        <span class="nav__item nav__item--cart">
+          <a class="nav__link nav__link--cart" href="carrinho.html" aria-label="Carrinho"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.2 6.5h15l-1.6 8.2a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.2 3.8H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only" data-i18n="cart"></span></a>
+          <span class="badge badge--nav" id="cartBadge">0</span>
+        </span>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="hocPage">
+
+  <section class="hero">
+    <div class="container hero__grid">
+      <div class="hero__left">
+        <h1 class="hero__title" data-i18n="hoc_title">Hemp Oil Company S.A.</h1>
+        <p class="hero__sub" data-i18n="hoc_hero_sub">
+          
+          Operação institucional focada em qualidade, rastreabilidade e desenvolvimento responsável para mercados regulados.
+        
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="hoc-solucoes.html" data-i18n="hoc_btn_solutions">Ver soluções</a>
+          <a class="btn btn--ghost" href="produtos.html" data-i18n="hoc_btn_store">Ir para a loja (Hemp Store)</a>
+        </div>
+      </div>
+
+      <div class="hero__image heroCarousel" id="heroCarousel" aria-label="Institucional">
+        <div class="heroCarousel__slides" id="heroSlides" aria-hidden="true"></div>
+        <div class="heroCarousel__overlay" id="heroOverlay" data-i18n="institutional">Institucional</div>
+
+        <button class="heroCarousel__btn heroCarousel__btn--prev" id="heroPrev" aria-label="Anterior">‹</button>
+        <button class="heroCarousel__btn heroCarousel__btn--next" id="heroNext" aria-label="Próximo">›</button>
+
+        <div class="heroCarousel__dots" id="heroDots" aria-label="Carousel pagination"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="featured">
+    <div class="container">
+      <h2 class="section-title" data-i18n="hoc_areas_title">Áreas principais</h2>
+      <div class="grid grid--3">
+        <div class="card">
+          <div class="card__img card__img--mint"><img class="hocCard__photo" src="assets/images/company/company-1.jpg" alt="Purple Haze" loading="lazy"/></div>
+          <div class="card__body">
+            <h3 class="card__title" data-i18n="hoc_card_rd_title">Pesquisa e desenvolvimento</h3>
+            <p class="card__sub" data-i18n="hoc_card_rd_sub">Estrutura para especificações, estabilidade, documentação e inovação.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__img card__img--mint"><img class="hocCard__photo" src="assets/images/company/company-3.jpg" alt="OG Kush" loading="lazy"/></div>
+          <div class="card__body">
+            <h3 class="card__title" data-i18n="hoc_card_quality_title">Qualidade e rastreabilidade</h3>
+            <p class="card__sub" data-i18n="hoc_card_quality_sub">Diretrizes de cadeia de custódia, controle por lote e consistência.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__img card__img--mint"><img class="hocCard__photo" src="assets/images/company/company-2.jpg" alt="Purple Haze" loading="lazy"/></div>
+          <div class="card__body">
+            <h3 class="card__title" data-i18n="hoc_card_compliance_title">Governança e conformidade</h3>
+            <p class="card__sub" data-i18n="hoc_card_compliance_sub">Políticas internas e adequação a normas aplicáveis (quando exigido).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="about" id="sobre">
+    <div class="container about__grid">
+      <div>
+        <h2 class="section-title" data-i18n="hoc_about_title">Quem somos</h2>
+        <p class="muted" data-i18n="hoc_about_p1"></p>
+        <p class="muted" data-i18n="hoc_about_p2"></p>
+        <div class="hr"></div>
+        <p class="small" data-i18n="hoc_about_points"></p>
+      </div>
+
+      <div class="panel">
+        <div class="panel__title" data-i18n="hoc_commitment_title"></div>
+        <p class="small muted" data-i18n="hoc_commitment_p"></p>
+        <div class="hr"></div>
+        <p class="small muted" data-i18n="notice_sub"></p>
+      </div>
+    </div>
+  </section>
+
+<section class="about" id="contato">
+    <div class="container about__grid">
+      <div>
+        <h2 class="section-title" data-i18n="hoc_contact_title">Contato B2B</h2>
+        <p class="muted" data-i18n="hoc_contact_sub">
+          Fale com a equipe comercial/técnica para parcerias, distribuição e desenvolvimento de portfólio.
+        </p>
+        <div class="hr"></div>
+        <p class="small"><b data-i18n="label_email">Email:</b> contato@hempoilcompany.com.br</p>
+        <p class="small"><b data-i18n="label_partnerships">Parcerias:</b> parcerias@hempoilcompany.com.br</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel__title" data-i18n="hoc_quick_msg">Mensagem rápida</div>
+        <div class="formgrid formgrid--1">
+          <div class="field">
+            <label class="label" data-i18n="label_name">Nome</label>
+            <input class="input" placeholder="Seu nome"/>
+          </div>
+          <div class="field">
+            <label class="label" data-i18n="email">E-mail</label>
+            <input class="input" placeholder="email@empresa.com"/>
+          </div>
+          <div class="field">
+            <label class="label" data-i18n="label_message">Mensagem</label>
+            <textarea class="input" rows="4" placeholder="Como podemos ajudar?"></textarea>
+          </div>
+          <button class="btn btn--primary" type="button" onclick="alert('')" data-i18n="send">Enviar</button>
+          <div class="small muted" data-i18n="hoc_form_demo"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+  <!-- FOOTER -->
+  <footer class="footerX footerX--minimal" id="siteFooter">
+  <div class="container footerX__shell">
+    <div class="footerX__top">
+      <div class="footerX__brandSimple">
+        <div class="footerX__name" id="footerBrand">HEMP Store</div>
+        <div class="footerX__desc" id="footerDesc" data-i18n="footer_desc_store"></div>
+      </div>
+      <nav class="footerX__nav" id="footerNav" aria-label="Footer navigation">
+        <a href="index.html" data-i18n="home">Home</a>
+        <a href="produtos.html" data-i18n="products">Produtos</a>
+        <a href="carrinho.html" data-i18n="cart">Carrinho</a>
+        <a href="login.html" data-i18n="login">Login</a>
+      </nav>
+    </div>
+    <div class="footerX__bottomSimple">
+    </div>
+  </div>
+</footer>
+
+<div class="modal" id="langModal" aria-hidden="true">
+  <div class="sheet">
+    <div class="sheet__head">
+      <div class="sheet__title" data-i18n="language">Language</div>
+      <button class="sheet__close" id="langClose" data-i18n="ok">OK</button>
+    </div>
+    <div class="wheel" id="langWheel"></div>
+  </div>
+</div>
+
+<!-- SCRIPT -->
+<script src="app.js"></script>
+</body>
+</html>
