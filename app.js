@@ -54,16 +54,39 @@ const LANGS = [
   
   
   /* ---------- API (localhost default) ---------- */
+  function getAppConfig(){
+    return (window.HEMP_STORE_CONFIG && typeof window.HEMP_STORE_CONFIG === "object") ? window.HEMP_STORE_CONFIG : {};
+  }
+
+  function cleanApiBase(value){
+    const clean = String(value || "").trim();
+    return clean ? clean.replace(/\/$/, "") : "";
+  }
+
   function getApiBase(){
     const q = new URLSearchParams(location.search);
     const fromQuery = q.get("api");
     if(fromQuery){
-      const clean = String(fromQuery).replace(/\/$/, "");
+      const clean = cleanApiBase(fromQuery);
       localStorage.setItem(LS.apiKey, clean);
       return clean;
     }
-    const stored = localStorage.getItem(LS.apiKey);
-    return String(stored || "http://localhost:3001").replace(/\/$/, "");
+
+    const stored = cleanApiBase(localStorage.getItem(LS.apiKey));
+    if(stored) return stored;
+
+    const cfg = getAppConfig();
+    const fromConfig = cleanApiBase(cfg.API_BASE_URL || cfg.apiBaseUrl || window.HEMP_API_BASE || "");
+    if(fromConfig) return fromConfig;
+
+    const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname || "");
+    return isLocal ? "http://localhost:3001" : "";
+  }
+
+  function getApiCredentialsMode(){
+    const cfg = getAppConfig();
+    const mode = String(cfg.API_CREDENTIALS || "omit").toLowerCase();
+    return ["omit", "same-origin", "include"].includes(mode) ? mode : "omit";
   }
   function getToken(){ return localStorage.getItem(LS.tokenKey) || ""; }
   function setToken(tok){
@@ -72,11 +95,16 @@ const LANGS = [
   }
 
   async function apiFetch(path, opts={}){
-    const url = getApiBase() + path;
+    const base = getApiBase();
+    if(!base){
+      throw new Error("Backend não configurado. Edite config.js com a URL da API ou abra a página usando ?api=https://sua-api.com");
+    }
+    const url = base + path;
     const headers = Object.assign({ "Content-Type":"application/json" }, (opts.headers||{}));
     const tok = getToken();
     if(tok) headers["Authorization"] = "Bearer " + tok;
-    const res = await fetch(url, Object.assign({}, opts, { headers }));
+    const requestInit = Object.assign({ credentials:getApiCredentialsMode() }, opts, { headers });
+    const res = await fetch(url, requestInit);
     let data = null;
     const ct = res.headers.get("content-type") || "";
     if(ct.includes("application/json")){
@@ -5882,15 +5910,60 @@ function renderProductPage(){
       try{
         const addr = await apiFetch("/addresses", { method:"POST", body: JSON.stringify(addressPayload) });
 
-        const items = cartNow.map(i=>({ sku: i.productId, quantity: i.qty }));
+        const totals = getCheckoutTotals();
+        const items = cartNow.map(i=>{
+          const p = findProduct(i.productId);
+          const variant = i.variant || {};
+          const unitPrice = p ? getVariantPrice(p, variant) : 0;
+          return {
+            sku: i.productId,
+            productId: i.productId,
+            name: p ? getProductName(p) : i.productId,
+            quantity: Number(i.qty) || 1,
+            variant,
+            unitPriceCents: Math.round(unitPrice * 100),
+            currency: "BRL",
+            cartKey: i.key
+          };
+        });
         const chk = await apiFetch("/checkout", {
           method:"POST",
           body: JSON.stringify({
-            addressId: addr.id,
+            addressId: addr.id || addr.addressId || addr._id,
             items,
+            customer: {
+              firstName: first,
+              lastName: last,
+              name: `${first} ${last}`.trim(),
+              email,
+              phone,
+              document: doc || undefined
+            },
+            shipping: {
+              method: getShip(),
+              amountCents: Math.round(totals.shipping * 100),
+              currency: "BRL"
+            },
+            totals: {
+              subtotalCents: Math.round(totals.subtotal * 100),
+              shippingCents: Math.round(totals.shipping * 100),
+              taxCents: Math.round(totals.tax * 100),
+              totalCents: Math.round(totals.total * 100),
+              currency: "BRL"
+            },
             paymentProvider: provider,
             clientPaymentMethod,
-            gatewayMode: "transparent"
+            gatewayMode: "transparent",
+            returnUrls: {
+              success: `${location.origin}${location.pathname.replace(/checkout\.html$/, "checkout-success.html")}`,
+              pending: `${location.origin}${location.pathname.replace(/checkout\.html$/, "checkout-pending.html")}`,
+              failure: `${location.origin}${location.pathname.replace(/checkout\.html$/, "checkout-failure.html")}`
+            },
+            metadata: {
+              source: "hemp-store-frontend",
+              frontendVersion: "v10-mobile-backend-ready",
+              locale: getLang()
+            }
           })
         });
 
