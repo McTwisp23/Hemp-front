@@ -105,6 +105,9 @@ const LANGS = [
 /* ---------- i18n dictionary ---------- */
   const I18N = {
     pt: {
+      or:"ou",
+      installment_of:"de",
+      password_min:"A senha precisa ter no mínimo 8 caracteres.",
       home:"Home", products:"Produtos", about:"Sobre", contact:"Contato",
       cart:"Carrinho", checkout:"Checkout", login:"Login",
       my_orders:"Minhas compras",
@@ -268,6 +271,9 @@ const LANGS = [
     },
   
     en: {
+      or:"or",
+      installment_of:"of",
+      password_min:"Password must be at least 8 characters long.",
       home:"Home", products:"Products", about:"About", contact:"Contact",
       cart:"Cart", checkout:"Checkout", login:"Login",
       my_orders:"My orders",
@@ -430,6 +436,9 @@ const LANGS = [
     },
   
     it: {
+      or:"oppure",
+      installment_of:"di",
+      password_min:"La password deve contenere almeno 8 caratteri.",
       home:"Home", products:"Prodotti", about:"Chi siamo", contact:"Contatto",
       cart:"Carrello", checkout:"Checkout", login:"Login",
       my_orders:"I miei ordini",
@@ -588,6 +597,9 @@ const LANGS = [
     },
   
     fr: {
+      or:"ou",
+      installment_of:"de",
+      password_min:"Le mot de passe doit comporter au moins 8 caractères.",
       home:"Accueil", products:"Produits", about:"À propos", contact:"Contact",
       cart:"Panier", checkout:"Paiement", login:"Connexion",
       my_orders:"Mes achats",
@@ -747,6 +759,9 @@ const LANGS = [
     },
   
     de: {
+      or:"oder",
+      installment_of:"von",
+      password_min:"Das Passwort muss mindestens 8 Zeichen lang sein.",
       home:"Start", products:"Produkte", about:"Über uns", contact:"Kontakt",
       cart:"Warenkorb", checkout:"Kasse", login:"Login",
       my_orders:"Meine Bestellungen",
@@ -906,6 +921,9 @@ const LANGS = [
     },
   
     es: {
+      or:"o",
+      installment_of:"de",
+      password_min:"La contraseña debe tener al menos 8 caracteres.",
       home:"Inicio", products:"Productos", about:"Sobre", contact:"Contacto",
       cart:"Carrito", checkout:"Checkout", login:"Login",
       my_orders:"Mis compras",
@@ -1049,6 +1067,9 @@ const LANGS = [
     },
 
     ja: {
+      or:"または",
+      installment_of:"/",
+      password_min:"パスワードは8文字以上で入力してください。",
       home:"ホーム", products:"商品", about:"概要", contact:"お問い合わせ",
       cart:"カート", checkout:"チェックアウト", login:"ログイン",
       my_orders:"購入履歴",
@@ -1216,6 +1237,9 @@ const LANGS = [
     },
   
     zh: {
+      or:"或",
+      installment_of:"共",
+      password_min:"密码至少需要 8 个字符。",
       home:"首页", products:"产品", about:"关于", contact:"联系",
       cart:"购物车", checkout:"结账", login:"登录",
       my_orders:"我的订单",
@@ -1576,6 +1600,7 @@ function t(key){
         JPY_PER_USD: Number(obj.JPY_PER_USD) || fallback.JPY_PER_USD,
         CNY_PER_USD: Number(obj.CNY_PER_USD) || fallback.CNY_PER_USD,
         BTC_USD: Number(obj.BTC_USD) || fallback.BTC_USD,
+        source: obj.source || "manual",
         updatedAt: obj.updatedAt || null
       };
     } catch { return fallback; }
@@ -1588,9 +1613,78 @@ function t(key){
       JPY_PER_USD: Number(r?.JPY_PER_USD ?? cur.JPY_PER_USD) || cur.JPY_PER_USD,
       CNY_PER_USD: Number(r?.CNY_PER_USD ?? cur.CNY_PER_USD) || cur.CNY_PER_USD,
       BTC_USD: Number(r?.BTC_USD ?? cur.BTC_USD) || cur.BTC_USD,
-      updatedAt: new Date().toISOString()
+      source: r?.source || cur.source || "manual",
+      updatedAt: r?.updatedAt || new Date().toISOString()
     };
     localStorage.setItem(CUR.ratesKey, JSON.stringify(next));
+  }
+
+  function ratesFreshForToday(r=getRates()){
+    if(!r?.updatedAt) return false;
+    const updated = new Date(r.updatedAt);
+    if(Number.isNaN(updated.getTime())) return false;
+    const now = new Date();
+    return updated.getFullYear() === now.getFullYear() &&
+           updated.getMonth() === now.getMonth() &&
+           updated.getDate() === now.getDate();
+  }
+
+  async function fetchLiveCurrencyRates(){
+    const [fxRes, btcRes] = await Promise.allSettled([
+      fetch("https://open.er-api.com/v6/latest/USD", { cache:"no-store" }),
+      fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", { cache:"no-store" })
+    ]);
+
+    let fx = null;
+    if(fxRes.status === "fulfilled" && fxRes.value.ok){
+      fx = await fxRes.value.json();
+    }
+
+    let btc = null;
+    if(btcRes.status === "fulfilled" && btcRes.value.ok){
+      btc = await btcRes.value.json();
+    }
+
+    const rates = fx?.rates || fx?.conversion_rates || {};
+    const brl = Number(rates.BRL);
+    const eur = Number(rates.EUR);
+    const jpy = Number(rates.JPY);
+    const cny = Number(rates.CNY);
+    const btcUsd = Number(btc?.bitcoin?.usd);
+
+    if(!isFinite(brl) || !isFinite(eur) || !isFinite(jpy) || !isFinite(cny)){
+      throw new Error(t("currency_rates_unavailable"));
+    }
+
+    return {
+      BRL_PER_USD: brl,
+      EUR_PER_USD: eur,
+      JPY_PER_USD: jpy,
+      CNY_PER_USD: cny,
+      BTC_USD: isFinite(btcUsd) ? btcUsd : getRates().BTC_USD,
+      source: "open.er-api.com + coingecko",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  async function refreshDailyRates({force=false, statusEl=null}={}){
+    if(!force && ratesFreshForToday()) return false;
+    try{
+      if(statusEl) statusEl.textContent = "Atualizando cotação diária…";
+      const live = await fetchLiveCurrencyRates();
+      setRates(live);
+      syncCurrencyButton();
+      pageRenderAll();
+      initHeroCarousel();
+      mountProductBackNav();
+      mountSmartFooter();
+      mountNewsletter();
+      if(statusEl) statusEl.textContent = `${t("currency_updated")} ${new Date(live.updatedAt).toLocaleString("pt-BR")}`;
+      return true;
+    }catch(err){
+      if(statusEl) statusEl.textContent = "Não foi possível atualizar agora. Mantive a última cotação salva.";
+      return false;
+    }
   }
 
   function formatNumber(v, {max=2, min=2}={}){
@@ -2339,6 +2433,540 @@ function t(key){
     "OG Kush",
     "Purple Haze",
   ];
+
+
+  /* ---------- Checkout/payment translation cleanup ---------- */
+  const CHECKOUT_COPY = {
+    pt: {
+      selected_item:"Item selecionado",
+      items_singular:"item",
+      items_plural:"itens",
+      checkout_transparent_badge:"Checkout transparente",
+      checkout_finalize_eyebrow:"Finalizar pedido",
+      checkout_hero_title:"Pagamento limpo, rápido e seguro.",
+      checkout_hero_sub:"Revise os itens, escolha Mercado Pago ou PayPal e conclua a compra em uma experiência simples e organizada.",
+      checkout_summary_toggle:"Ver resumo do pedido",
+      checkout_summary_label:"Resumo do pedido",
+      checkout_updated:"Atualizado",
+      shipping_standard_label:"Padrão",
+      shipping_express_label:"Expresso",
+      fees:"Taxas",
+      payment_details_aria:"Detalhes de pagamento",
+      payment_providers:"Provedores de pagamento",
+      payment_details_title:"Inserir detalhes de pagamento",
+      payment_details_sub:"Checkout transparente com PIX, cartão, boleto, PayPal e opção alternativa em criptomoedas.",
+      customer_data:"Dados do cliente",
+      full_name:"Nome completo",
+      full_name_ph:"Nome e sobrenome",
+      delivery_title:"Entrega",
+      address1_ph:"Rua, número",
+      address2_ph:"Apartamento, bloco, referência",
+      payment_method_title:"Forma de pagamento",
+      pay_pix_desc:"Mercado Pago — QR Code e copia e cola",
+      pay_card_name:"Cartão",
+      pay_card_desc:"Checkout transparente via Mercado Pago",
+      pay_boleto_desc:"Geração pelo Mercado Pago",
+      pay_paypal_desc:"Conta PayPal ou cartão salvo",
+      pay_crypto_name:"Criptomoedas",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"Revelar código QR",
+      checkout_fine_print:"Ao finalizar, você autoriza a criação da cobrança no provedor selecionado. Valores em BRL podem variar conforme taxas do gateway e confirmação de pagamento.",
+      copied:"Copiado",
+      payhint_pix:"Um código QR será exibido para escanear e concluir a compra.",
+      qr_pix_preview:"Prévia do QR Code Pix",
+      pix_detail_title:"PIX via Mercado Pago",
+      pix_detail_body:"Na integração real, o backend cria a cobrança no Mercado Pago e retorna o QR Code.",
+      estimated_fees:"Taxas estimadas",
+      amount_due:"Total devido",
+      copy_pix:"Copiar Pix",
+      payhint_card:"Os dados do cartão ficam nesta tela; em produção use tokenização segura do Mercado Pago.",
+      pay_button_card:"Pagar com cartão",
+      payhint_boleto:"O boleto é gerado pelo Mercado Pago e fica pendente até a compensação.",
+      pay_button_boleto:"Gerar boleto",
+      boleto_detail_title:"Boleto Mercado Pago",
+      boleto_detail_body:"Use o código abaixo apenas para demonstração visual. Em produção, gere pelo backend.",
+      copy_code:"Copiar código",
+      payhint_paypal:"O comprador segue para autorização PayPal ou confirma com cartão salvo.",
+      pay_button_paypal:"Continuar com PayPal",
+      paypal_detail_title:"Pagamento via PayPal",
+      paypal_detail_body:"Na produção, o backend cria uma ordem PayPal e retorna o link de aprovação.",
+      authorized_total:"Total autorizado",
+      initial_status:"Status inicial",
+      pending:"Pendente",
+      payhint_btc:"Pagamento alternativo em Bitcoin Lightning.",
+      pay_button_btc:"Gerar invoice Lightning",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Invoice de demonstração. Substitua por BTCPay Server/LNURL em produção.",
+      checkout_fail:"Falha ao finalizar o pedido.",
+      login_fail:"Falha ao entrar.",
+      no_orders:"Nenhum pedido encontrado.",
+      orders_load_fail:"Falha ao carregar pedidos:",
+      currency_rates_unavailable:"Taxas de câmbio indisponíveis"
+    },
+    en: {
+      selected_item:"Selected item",
+      items_singular:"item",
+      items_plural:"items",
+      checkout_transparent_badge:"Transparent checkout",
+      checkout_finalize_eyebrow:"Complete order",
+      checkout_hero_title:"Clean, fast, secure payment.",
+      checkout_hero_sub:"Review your items, choose Mercado Pago or PayPal, and complete the purchase in a simple, organized experience.",
+      checkout_summary_toggle:"View order summary",
+      checkout_summary_label:"Order summary",
+      checkout_updated:"Updated",
+      shipping_standard_label:"Standard",
+      shipping_express_label:"Express",
+      fees:"Fees",
+      payment_details_aria:"Payment details",
+      payment_providers:"Payment providers",
+      payment_details_title:"Enter payment details",
+      payment_details_sub:"Transparent checkout with PIX, card, boleto, PayPal and an alternative cryptocurrency option.",
+      customer_data:"Customer details",
+      full_name:"Full name",
+      full_name_ph:"First and last name",
+      delivery_title:"Delivery",
+      address1_ph:"Street and number",
+      address2_ph:"Apartment, block, reference",
+      payment_method_title:"Payment method",
+      pay_pix_desc:"Mercado Pago — QR Code and copy-paste code",
+      pay_card_name:"Card",
+      pay_card_desc:"Transparent checkout via Mercado Pago",
+      pay_boleto_desc:"Generated through Mercado Pago",
+      pay_paypal_desc:"PayPal account or saved card",
+      pay_crypto_name:"Cryptocurrency",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"Reveal QR code",
+      checkout_fine_print:"By placing the order, you authorize charge creation with the selected provider. BRL amounts may vary according to gateway fees and payment confirmation.",
+      copied:"Copied",
+      payhint_pix:"A QR code will be shown so you can scan it and complete the purchase.",
+      qr_pix_preview:"Pix QR Code preview",
+      pix_detail_title:"PIX via Mercado Pago",
+      pix_detail_body:"In the real integration, the backend creates the Mercado Pago charge and returns the QR Code.",
+      estimated_fees:"Estimated fees",
+      amount_due:"Amount due",
+      copy_pix:"Copy Pix",
+      payhint_card:"Card details stay on this screen; in production, use secure Mercado Pago tokenization.",
+      pay_button_card:"Pay by card",
+      payhint_boleto:"The boleto is generated by Mercado Pago and remains pending until settlement.",
+      pay_button_boleto:"Generate boleto",
+      boleto_detail_title:"Mercado Pago boleto",
+      boleto_detail_body:"Use the code below only as a visual demonstration. In production, generate it through the backend.",
+      copy_code:"Copy code",
+      payhint_paypal:"The buyer continues to PayPal authorization or confirms with a saved card.",
+      pay_button_paypal:"Continue with PayPal",
+      paypal_detail_title:"Payment via PayPal",
+      paypal_detail_body:"In production, the backend creates a PayPal order and returns the approval link.",
+      authorized_total:"Authorized total",
+      initial_status:"Initial status",
+      pending:"Pending",
+      payhint_btc:"Alternative payment through Bitcoin Lightning.",
+      pay_button_btc:"Generate Lightning invoice",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Demonstration invoice. Replace it with BTCPay Server/LNURL in production.",
+      checkout_fail:"Could not complete the order.",
+      login_fail:"Could not sign in.",
+      no_orders:"No orders found.",
+      orders_load_fail:"Could not load orders:",
+      currency_rates_unavailable:"Exchange rates unavailable"
+    },
+    fr: {
+      selected_item:"Article sélectionné",
+      items_singular:"article",
+      items_plural:"articles",
+      checkout_transparent_badge:"Paiement transparent",
+      checkout_finalize_eyebrow:"Finaliser la commande",
+      checkout_hero_title:"Paiement clair, rapide et sécurisé.",
+      checkout_hero_sub:"Vérifiez les articles, choisissez Mercado Pago ou PayPal et finalisez l’achat dans une expérience simple et organisée.",
+      checkout_summary_toggle:"Voir le récapitulatif",
+      checkout_summary_label:"Récapitulatif de commande",
+      checkout_updated:"Mis à jour",
+      shipping_standard_label:"Standard",
+      shipping_express_label:"Express",
+      fees:"Frais",
+      payment_details_aria:"Détails du paiement",
+      payment_providers:"Prestataires de paiement",
+      payment_details_title:"Saisir les informations de paiement",
+      payment_details_sub:"Paiement transparent avec PIX, carte, boleto, PayPal et une option alternative en cryptomonnaie.",
+      customer_data:"Données client",
+      full_name:"Nom complet",
+      full_name_ph:"Prénom et nom",
+      delivery_title:"Livraison",
+      address1_ph:"Rue et numéro",
+      address2_ph:"Appartement, bâtiment, référence",
+      payment_method_title:"Mode de paiement",
+      pay_pix_desc:"Mercado Pago — QR Code et code à copier-coller",
+      pay_card_name:"Carte",
+      pay_card_desc:"Paiement transparent via Mercado Pago",
+      pay_boleto_desc:"Généré par Mercado Pago",
+      pay_paypal_desc:"Compte PayPal ou carte enregistrée",
+      pay_crypto_name:"Cryptomonnaies",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"Afficher le QR Code",
+      checkout_fine_print:"En finalisant, vous autorisez la création du paiement auprès du prestataire sélectionné. Les montants en BRL peuvent varier selon les frais de passerelle et la confirmation du paiement.",
+      copied:"Copié",
+      payhint_pix:"Un QR Code sera affiché pour scanner et finaliser l’achat.",
+      qr_pix_preview:"Aperçu du QR Code Pix",
+      pix_detail_title:"PIX via Mercado Pago",
+      pix_detail_body:"Dans l’intégration réelle, le backend crée le paiement Mercado Pago et renvoie le QR Code.",
+      estimated_fees:"Frais estimés",
+      amount_due:"Total à payer",
+      copy_pix:"Copier le Pix",
+      payhint_card:"Les données de carte restent sur cet écran ; en production, utilisez la tokenisation sécurisée de Mercado Pago.",
+      pay_button_card:"Payer par carte",
+      payhint_boleto:"Le boleto est généré par Mercado Pago et reste en attente jusqu’à compensation.",
+      pay_button_boleto:"Générer le boleto",
+      boleto_detail_title:"Boleto Mercado Pago",
+      boleto_detail_body:"Utilisez le code ci-dessous uniquement pour une démonstration visuelle. En production, générez-le via le backend.",
+      copy_code:"Copier le code",
+      payhint_paypal:"L’acheteur poursuit l’autorisation PayPal ou confirme avec une carte enregistrée.",
+      pay_button_paypal:"Continuer avec PayPal",
+      paypal_detail_title:"Paiement via PayPal",
+      paypal_detail_body:"En production, le backend crée une commande PayPal et renvoie le lien d’approbation.",
+      authorized_total:"Total autorisé",
+      initial_status:"Statut initial",
+      pending:"En attente",
+      payhint_btc:"Paiement alternatif en Bitcoin Lightning.",
+      pay_button_btc:"Générer une invoice Lightning",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Invoice de démonstration. Remplacez-la par BTCPay Server/LNURL en production.",
+      checkout_fail:"Impossible de finaliser la commande.",
+      login_fail:"Impossible de se connecter.",
+      no_orders:"Aucune commande trouvée.",
+      orders_load_fail:"Impossible de charger les commandes :",
+      currency_rates_unavailable:"Taux de change indisponibles"
+    },
+    it: {
+      selected_item:"Articolo selezionato",
+      items_singular:"articolo",
+      items_plural:"articoli",
+      checkout_transparent_badge:"Checkout trasparente",
+      checkout_finalize_eyebrow:"Completa ordine",
+      checkout_hero_title:"Pagamento pulito, rapido e sicuro.",
+      checkout_hero_sub:"Rivedi gli articoli, scegli Mercado Pago o PayPal e completa l’acquisto in un’esperienza semplice e ordinata.",
+      checkout_summary_toggle:"Vedi riepilogo ordine",
+      checkout_summary_label:"Riepilogo ordine",
+      checkout_updated:"Aggiornato",
+      shipping_standard_label:"Standard",
+      shipping_express_label:"Espresso",
+      fees:"Commissioni",
+      payment_details_aria:"Dettagli pagamento",
+      payment_providers:"Provider di pagamento",
+      payment_details_title:"Inserisci i dettagli di pagamento",
+      payment_details_sub:"Checkout trasparente con PIX, carta, boleto, PayPal e opzione alternativa in criptovaluta.",
+      customer_data:"Dati cliente",
+      full_name:"Nome completo",
+      full_name_ph:"Nome e cognome",
+      delivery_title:"Consegna",
+      address1_ph:"Via e numero",
+      address2_ph:"Appartamento, blocco, riferimento",
+      payment_method_title:"Metodo di pagamento",
+      pay_pix_desc:"Mercado Pago — QR Code e codice copia-incolla",
+      pay_card_name:"Carta",
+      pay_card_desc:"Checkout trasparente via Mercado Pago",
+      pay_boleto_desc:"Generazione tramite Mercado Pago",
+      pay_paypal_desc:"Account PayPal o carta salvata",
+      pay_crypto_name:"Criptovalute",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"Mostra codice QR",
+      checkout_fine_print:"Finalizzando, autorizzi la creazione dell’addebito presso il provider selezionato. Gli importi in BRL possono variare in base alle commissioni del gateway e alla conferma del pagamento.",
+      copied:"Copiato",
+      payhint_pix:"Verrà mostrato un QR Code da scansionare per completare l’acquisto.",
+      qr_pix_preview:"Anteprima QR Code Pix",
+      pix_detail_title:"PIX via Mercado Pago",
+      pix_detail_body:"Nell’integrazione reale, il backend crea l’addebito Mercado Pago e restituisce il QR Code.",
+      estimated_fees:"Commissioni stimate",
+      amount_due:"Totale dovuto",
+      copy_pix:"Copia Pix",
+      payhint_card:"I dati della carta restano in questa schermata; in produzione usa la tokenizzazione sicura di Mercado Pago.",
+      pay_button_card:"Paga con carta",
+      payhint_boleto:"Il boleto viene generato da Mercado Pago e resta in sospeso fino alla compensazione.",
+      pay_button_boleto:"Genera boleto",
+      boleto_detail_title:"Boleto Mercado Pago",
+      boleto_detail_body:"Usa il codice qui sotto solo come dimostrazione visiva. In produzione, generalo tramite backend.",
+      copy_code:"Copia codice",
+      payhint_paypal:"L’acquirente procede con l’autorizzazione PayPal o conferma con una carta salvata.",
+      pay_button_paypal:"Continua con PayPal",
+      paypal_detail_title:"Pagamento via PayPal",
+      paypal_detail_body:"In produzione, il backend crea un ordine PayPal e restituisce il link di approvazione.",
+      authorized_total:"Totale autorizzato",
+      initial_status:"Stato iniziale",
+      pending:"In sospeso",
+      payhint_btc:"Pagamento alternativo in Bitcoin Lightning.",
+      pay_button_btc:"Genera invoice Lightning",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Invoice dimostrativa. Sostituiscila con BTCPay Server/LNURL in produzione.",
+      checkout_fail:"Impossibile finalizzare l’ordine.",
+      login_fail:"Accesso non riuscito.",
+      no_orders:"Nessun ordine trovato.",
+      orders_load_fail:"Impossibile caricare gli ordini:",
+      currency_rates_unavailable:"Tassi di cambio non disponibili"
+    },
+    es: {
+      selected_item:"Artículo seleccionado",
+      items_singular:"artículo",
+      items_plural:"artículos",
+      checkout_transparent_badge:"Checkout transparente",
+      checkout_finalize_eyebrow:"Finalizar pedido",
+      checkout_hero_title:"Pago limpio, rápido y seguro.",
+      checkout_hero_sub:"Revisa los artículos, elige Mercado Pago o PayPal y completa la compra en una experiencia simple y organizada.",
+      checkout_summary_toggle:"Ver resumen del pedido",
+      checkout_summary_label:"Resumen del pedido",
+      checkout_updated:"Actualizado",
+      shipping_standard_label:"Estándar",
+      shipping_express_label:"Exprés",
+      fees:"Comisiones",
+      payment_details_aria:"Detalles de pago",
+      payment_providers:"Proveedores de pago",
+      payment_details_title:"Ingresa los datos de pago",
+      payment_details_sub:"Checkout transparente con PIX, tarjeta, boleto, PayPal y opción alternativa en criptomonedas.",
+      customer_data:"Datos del cliente",
+      full_name:"Nombre completo",
+      full_name_ph:"Nombre y apellido",
+      delivery_title:"Entrega",
+      address1_ph:"Calle y número",
+      address2_ph:"Apartamento, bloque, referencia",
+      payment_method_title:"Forma de pago",
+      pay_pix_desc:"Mercado Pago — QR Code y código copia y pega",
+      pay_card_name:"Tarjeta",
+      pay_card_desc:"Checkout transparente vía Mercado Pago",
+      pay_boleto_desc:"Generación por Mercado Pago",
+      pay_paypal_desc:"Cuenta PayPal o tarjeta guardada",
+      pay_crypto_name:"Criptomonedas",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"Mostrar código QR",
+      checkout_fine_print:"Al finalizar, autorizas la creación del cobro con el proveedor seleccionado. Los valores en BRL pueden variar según comisiones del gateway y confirmación del pago.",
+      copied:"Copiado",
+      payhint_pix:"Se mostrará un código QR para escanear y completar la compra.",
+      qr_pix_preview:"Vista previa del QR Code Pix",
+      pix_detail_title:"PIX vía Mercado Pago",
+      pix_detail_body:"En la integración real, el backend crea el cobro en Mercado Pago y devuelve el QR Code.",
+      estimated_fees:"Comisiones estimadas",
+      amount_due:"Total a pagar",
+      copy_pix:"Copiar Pix",
+      payhint_card:"Los datos de la tarjeta quedan en esta pantalla; en producción usa tokenización segura de Mercado Pago.",
+      pay_button_card:"Pagar con tarjeta",
+      payhint_boleto:"El boleto lo genera Mercado Pago y queda pendiente hasta la compensación.",
+      pay_button_boleto:"Generar boleto",
+      boleto_detail_title:"Boleto Mercado Pago",
+      boleto_detail_body:"Usa el código de abajo solo como demostración visual. En producción, genéralo desde el backend.",
+      copy_code:"Copiar código",
+      payhint_paypal:"El comprador continúa a la autorización de PayPal o confirma con una tarjeta guardada.",
+      pay_button_paypal:"Continuar con PayPal",
+      paypal_detail_title:"Pago vía PayPal",
+      paypal_detail_body:"En producción, el backend crea una orden PayPal y devuelve el enlace de aprobación.",
+      authorized_total:"Total autorizado",
+      initial_status:"Estado inicial",
+      pending:"Pendiente",
+      payhint_btc:"Pago alternativo en Bitcoin Lightning.",
+      pay_button_btc:"Generar invoice Lightning",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Invoice de demostración. Sustitúyela por BTCPay Server/LNURL en producción.",
+      checkout_fail:"No se pudo finalizar el pedido.",
+      login_fail:"No se pudo iniciar sesión.",
+      no_orders:"No se encontraron pedidos.",
+      orders_load_fail:"No se pudieron cargar los pedidos:",
+      currency_rates_unavailable:"Tasas de cambio no disponibles"
+    },
+    de: {
+      selected_item:"Ausgewählter Artikel",
+      items_singular:"Artikel",
+      items_plural:"Artikel",
+      checkout_transparent_badge:"Transparenter Checkout",
+      checkout_finalize_eyebrow:"Bestellung abschließen",
+      checkout_hero_title:"Klare, schnelle und sichere Zahlung.",
+      checkout_hero_sub:"Prüfen Sie die Artikel, wählen Sie Mercado Pago oder PayPal und schließen Sie den Kauf in einer einfachen, übersichtlichen Oberfläche ab.",
+      checkout_summary_toggle:"Bestellübersicht anzeigen",
+      checkout_summary_label:"Bestellübersicht",
+      checkout_updated:"Aktualisiert",
+      shipping_standard_label:"Standard",
+      shipping_express_label:"Express",
+      fees:"Gebühren",
+      payment_details_aria:"Zahlungsdetails",
+      payment_providers:"Zahlungsanbieter",
+      payment_details_title:"Zahlungsdetails eingeben",
+      payment_details_sub:"Transparenter Checkout mit PIX, Karte, Boleto, PayPal und alternativer Kryptowährungsoption.",
+      customer_data:"Kundendaten",
+      full_name:"Vollständiger Name",
+      full_name_ph:"Vor- und Nachname",
+      delivery_title:"Lieferung",
+      address1_ph:"Straße und Hausnummer",
+      address2_ph:"Wohnung, Block, Referenz",
+      payment_method_title:"Zahlungsart",
+      pay_pix_desc:"Mercado Pago — QR-Code und Copy-and-paste-Code",
+      pay_card_name:"Karte",
+      pay_card_desc:"Transparenter Checkout über Mercado Pago",
+      pay_boleto_desc:"Erzeugung über Mercado Pago",
+      pay_paypal_desc:"PayPal-Konto oder gespeicherte Karte",
+      pay_crypto_name:"Kryptowährungen",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"QR-Code anzeigen",
+      checkout_fine_print:"Mit dem Abschluss autorisieren Sie die Erstellung der Zahlung beim ausgewählten Anbieter. BRL-Beträge können je nach Gateway-Gebühren und Zahlungsbestätigung variieren.",
+      copied:"Kopiert",
+      payhint_pix:"Ein QR-Code wird angezeigt, damit Sie scannen und den Kauf abschließen können.",
+      qr_pix_preview:"Pix-QR-Code-Vorschau",
+      pix_detail_title:"PIX über Mercado Pago",
+      pix_detail_body:"In der echten Integration erstellt das Backend die Mercado-Pago-Zahlung und gibt den QR-Code zurück.",
+      estimated_fees:"Geschätzte Gebühren",
+      amount_due:"Fälliger Betrag",
+      copy_pix:"Pix kopieren",
+      payhint_card:"Kartendaten bleiben auf diesem Bildschirm; in Produktion sichere Mercado-Pago-Tokenisierung verwenden.",
+      pay_button_card:"Mit Karte zahlen",
+      payhint_boleto:"Das Boleto wird von Mercado Pago erzeugt und bleibt bis zur Verrechnung ausstehend.",
+      pay_button_boleto:"Boleto erzeugen",
+      boleto_detail_title:"Mercado-Pago-Boleto",
+      boleto_detail_body:"Verwenden Sie den untenstehenden Code nur als visuelle Demonstration. In Produktion über das Backend erzeugen.",
+      copy_code:"Code kopieren",
+      payhint_paypal:"Der Käufer fährt mit der PayPal-Autorisierung fort oder bestätigt mit einer gespeicherten Karte.",
+      pay_button_paypal:"Weiter mit PayPal",
+      paypal_detail_title:"Zahlung per PayPal",
+      paypal_detail_body:"In Produktion erstellt das Backend eine PayPal-Bestellung und gibt den Genehmigungslink zurück.",
+      authorized_total:"Autorisierter Gesamtbetrag",
+      initial_status:"Anfangsstatus",
+      pending:"Ausstehend",
+      payhint_btc:"Alternative Zahlung mit Bitcoin Lightning.",
+      pay_button_btc:"Lightning-Invoice erzeugen",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"Demonstrations-Invoice. In Produktion durch BTCPay Server/LNURL ersetzen.",
+      checkout_fail:"Bestellung konnte nicht abgeschlossen werden.",
+      login_fail:"Anmeldung fehlgeschlagen.",
+      no_orders:"Keine Bestellungen gefunden.",
+      orders_load_fail:"Bestellungen konnten nicht geladen werden:",
+      currency_rates_unavailable:"Wechselkurse nicht verfügbar"
+    },
+    ja: {
+      selected_item:"選択済みの商品",
+      items_singular:"点",
+      items_plural:"点",
+      checkout_transparent_badge:"透明性のあるチェックアウト",
+      checkout_finalize_eyebrow:"注文を完了",
+      checkout_hero_title:"わかりやすく、速く、安全な決済。",
+      checkout_hero_sub:"商品を確認し、Mercado Pago または PayPal を選んで、シンプルで整理された画面のまま購入を完了します。",
+      checkout_summary_toggle:"注文内容を表示",
+      checkout_summary_label:"注文内容",
+      checkout_updated:"更新済み",
+      shipping_standard_label:"通常",
+      shipping_express_label:"速達",
+      fees:"手数料",
+      payment_details_aria:"支払い詳細",
+      payment_providers:"決済プロバイダー",
+      payment_details_title:"支払い情報を入力",
+      payment_details_sub:"PIX、カード、boleto、PayPal、暗号資産の代替オプションに対応した透明性のあるチェックアウトです。",
+      customer_data:"お客様情報",
+      full_name:"氏名",
+      full_name_ph:"姓と名",
+      delivery_title:"配送",
+      address1_ph:"通り名・番地",
+      address2_ph:"部屋番号、建物、目印",
+      payment_method_title:"支払い方法",
+      pay_pix_desc:"Mercado Pago — QRコードとコピー用コード",
+      pay_card_name:"カード",
+      pay_card_desc:"Mercado Pago の透明性のあるチェックアウト",
+      pay_boleto_desc:"Mercado Pago で生成",
+      pay_paypal_desc:"PayPal アカウントまたは保存済みカード",
+      pay_crypto_name:"暗号資産",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"QRコードを表示",
+      checkout_fine_print:"注文を完了すると、選択したプロバイダーで請求を作成することを承認したものとみなされます。BRL 金額はゲートウェイ手数料や支払い確認により変動する場合があります。",
+      copied:"コピーしました",
+      payhint_pix:"購入を完了するための QR コードが表示されます。",
+      qr_pix_preview:"Pix QRコードのプレビュー",
+      pix_detail_title:"Mercado Pago 経由の PIX",
+      pix_detail_body:"実際の連携では、バックエンドが Mercado Pago の請求を作成し、QR コードを返します。",
+      estimated_fees:"見積手数料",
+      amount_due:"支払総額",
+      copy_pix:"Pix をコピー",
+      payhint_card:"カード情報はこの画面内で扱われます。本番環境では Mercado Pago の安全なトークン化を使用してください。",
+      pay_button_card:"カードで支払う",
+      payhint_boleto:"boleto は Mercado Pago で生成され、決済完了まで保留になります。",
+      pay_button_boleto:"boleto を生成",
+      boleto_detail_title:"Mercado Pago boleto",
+      boleto_detail_body:"下記コードは表示確認用です。本番ではバックエンドで生成してください。",
+      copy_code:"コードをコピー",
+      payhint_paypal:"購入者は PayPal の承認へ進むか、保存済みカードで確認します。",
+      pay_button_paypal:"PayPal で続行",
+      paypal_detail_title:"PayPal で支払い",
+      paypal_detail_body:"本番環境では、バックエンドが PayPal 注文を作成し、承認リンクを返します。",
+      authorized_total:"承認済み合計",
+      initial_status:"初期ステータス",
+      pending:"保留中",
+      payhint_btc:"Bitcoin Lightning による代替支払いです。",
+      pay_button_btc:"Lightning invoice を生成",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"表示確認用の invoice です。本番では BTCPay Server/LNURL に置き換えてください。",
+      checkout_fail:"注文を完了できませんでした。",
+      login_fail:"ログインできませんでした。",
+      no_orders:"注文が見つかりませんでした。",
+      orders_load_fail:"注文を読み込めませんでした:",
+      currency_rates_unavailable:"為替レートを利用できません"
+    },
+    zh: {
+      selected_item:"已选商品",
+      items_singular:"件商品",
+      items_plural:"件商品",
+      checkout_transparent_badge:"透明结账",
+      checkout_finalize_eyebrow:"完成订单",
+      checkout_hero_title:"清晰、快速、安全的支付。",
+      checkout_hero_sub:"检查商品，选择 Mercado Pago 或 PayPal，并在简洁有序的体验中完成购买。",
+      checkout_summary_toggle:"查看订单摘要",
+      checkout_summary_label:"订单摘要",
+      checkout_updated:"已更新",
+      shipping_standard_label:"标准",
+      shipping_express_label:"快速",
+      fees:"费用",
+      payment_details_aria:"支付详情",
+      payment_providers:"支付服务商",
+      payment_details_title:"填写支付信息",
+      payment_details_sub:"支持 PIX、银行卡、boleto、PayPal 以及加密货币替代选项的透明结账。",
+      customer_data:"客户信息",
+      full_name:"姓名",
+      full_name_ph:"姓名",
+      delivery_title:"配送",
+      address1_ph:"街道和门牌号",
+      address2_ph:"公寓、楼栋、参考信息",
+      payment_method_title:"支付方式",
+      pay_pix_desc:"Mercado Pago — QR Code 和复制粘贴码",
+      pay_card_name:"银行卡",
+      pay_card_desc:"通过 Mercado Pago 透明结账",
+      pay_boleto_desc:"由 Mercado Pago 生成",
+      pay_paypal_desc:"PayPal 账户或已保存银行卡",
+      pay_crypto_name:"加密货币",
+      pay_crypto_desc:"Bitcoin Lightning",
+      reveal_qr:"显示二维码",
+      checkout_fine_print:"完成订单即表示你授权所选服务商创建收款。BRL 金额可能因网关费用和支付确认而变化。",
+      copied:"已复制",
+      payhint_pix:"将显示二维码，供你扫描并完成购买。",
+      qr_pix_preview:"Pix 二维码预览",
+      pix_detail_title:"通过 Mercado Pago 使用 PIX",
+      pix_detail_body:"在真实集成中，后端会创建 Mercado Pago 收款并返回二维码。",
+      estimated_fees:"预计费用",
+      amount_due:"应付总额",
+      copy_pix:"复制 Pix",
+      payhint_card:"银行卡信息保留在此页面；生产环境请使用 Mercado Pago 安全令牌化。",
+      pay_button_card:"银行卡支付",
+      payhint_boleto:"boleto 由 Mercado Pago 生成，并在清算前保持待处理状态。",
+      pay_button_boleto:"生成 boleto",
+      boleto_detail_title:"Mercado Pago boleto",
+      boleto_detail_body:"下方代码仅用于视觉展示。生产环境请通过后端生成。",
+      copy_code:"复制代码",
+      payhint_paypal:"买家将继续前往 PayPal 授权，或使用已保存银行卡确认。",
+      pay_button_paypal:"继续使用 PayPal",
+      paypal_detail_title:"通过 PayPal 支付",
+      paypal_detail_body:"生产环境中，后端会创建 PayPal 订单并返回批准链接。",
+      authorized_total:"授权总额",
+      initial_status:"初始状态",
+      pending:"待处理",
+      payhint_btc:"通过 Bitcoin Lightning 的替代支付方式。",
+      pay_button_btc:"生成 Lightning invoice",
+      btc_detail_title:"Bitcoin Lightning",
+      btc_detail_body:"展示用 invoice。生产环境请替换为 BTCPay Server/LNURL。",
+      checkout_fail:"无法完成订单。",
+      login_fail:"无法登录。",
+      no_orders:"未找到订单。",
+      orders_load_fail:"无法加载订单:",
+      currency_rates_unavailable:"汇率不可用"
+    }
+  };
+  Object.keys(CHECKOUT_COPY).forEach(lang=>Object.assign(I18N[lang], CHECKOUT_COPY[lang]));
 
   const PRODUCTS = [
     {
@@ -3627,7 +4255,10 @@ pageRenderAll();
 
     function open(){
       loadRatesToInputs();
-      if(status) status.textContent = "";
+      const r = getRates();
+      if(status){
+        status.textContent = r.updatedAt ? `Última cotação: ${new Date(r.updatedAt).toLocaleString("pt-BR")}` : "";
+      }
       renderWheel();
       modal.classList.add("modal--open");
     }
@@ -3650,35 +4281,11 @@ pageRenderAll();
     initHeroCarousel();
     });
 
-    // Optional online update (works when the site is served with internet access).
+    // Atualização online: busca a cotação real do dia e salva localmente.
     updBtn?.addEventListener("click", async ()=>{
-      try{
-        if(status) status.textContent = "…";
-        const [fxRes, btcRes] = await Promise.all([
-          fetch("https://api.exchangerate.host/latest?base=USD&symbols=BRL,EUR,JPY,CNY"),
-          fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
-        ]);
-        const fx = await fxRes.json();
-        const btc = await btcRes.json();
-        const brl = Number(fx?.rates?.BRL);
-        const eur = Number(fx?.rates?.EUR);
-        const jpy = Number(fx?.rates?.JPY);
-        const cny = Number(fx?.rates?.CNY);
-        const btcUsd = Number(btc?.bitcoin?.usd);
-        setRates({
-          BRL_PER_USD: isFinite(brl) ? brl : undefined,
-          EUR_PER_USD: isFinite(eur) ? eur : undefined,
-          JPY_PER_USD: isFinite(jpy) ? jpy : undefined,
-          CNY_PER_USD: isFinite(cny) ? cny : undefined,
-          BTC_USD: isFinite(btcUsd) ? btcUsd : undefined,
-        });
-        loadRatesToInputs();
-        if(status) status.textContent = t("currency_updated");
-        pageRenderAll();
-    initHeroCarousel();
-      } catch(err){
-        if(status) status.textContent = "(offline)";
-      }
+      const ok = await refreshDailyRates({ force:true, statusEl:status });
+      loadRatesToInputs();
+      if(ok) renderWheel();
     });
   }
 
@@ -4580,7 +5187,7 @@ function renderProductPage(){
       const password = String(fd.get("password")||"").trim();
       if(!email || !password) return;
       if(password.length < 8){
-        alert("A senha precisa ter no mínimo 8 caracteres.");
+        alert(t("password_min"));
         return;
       }
       try{
@@ -4604,7 +5211,7 @@ function renderProductPage(){
             // fallthrough
           }
         }
-        alert((err && err.message) ? err.message : "Falha ao entrar.");
+        alert((err && err.message) ? err.message : t("login_fail"));
       }
     });
   }
@@ -4716,11 +5323,13 @@ function renderProductPage(){
     const cart = getValidCart();
     if(cart.length === 0){
       root.innerHTML = `
-        <div class="cardform">
-          <h2 style="margin:0 0 8px">${t("checkout")}</h2>
-          <p class="small">${t("empty_cart")}</p>
-          <div class="hr"></div>
-          <a class="btn btn--primary" href="produtos.html">${t("products")}</a>
+        <div class="checkoutEmpty">
+          <div class="checkoutEmpty__card">
+            <div class="checkoutHeroBadge">${t("checkout_transparent_badge")}</div>
+            <h2>${t("checkout")}</h2>
+            <p class="small">${t("empty_cart")}</p>
+            <a class="btn btn--primary" href="produtos.html">${t("products")}</a>
+          </div>
         </div>
       `;
       return;
@@ -4728,189 +5337,226 @@ function renderProductPage(){
 
     const totalsBase = cartTotals(cart);
     const user = getUser();
+    const userEmail = escapeHTML(user?.email || "");
+    const totalQty = cart.reduce((sum, item)=>sum + (Number(item.qty) || 0), 0);
+    const totalQtyLabel = `${totalQty} ${totalQty === 1 ? t("items_singular") : t("items_plural")}`;
+
+    const lineItems = cart.map(it=>{
+      const p = findProduct(it.productId);
+      const name = p ? getProductName(p) : it.productId;
+      const v = it.variant || {};
+      const variantText = Object.values(v).filter(Boolean).map(x=>optionLabel(x)).join(" • ");
+      const line = (p ? getVariantPrice(p, v) : 0) * it.qty;
+      return `
+        <div class="checkoutLineItem">
+          <div class="checkoutLineItem__info">
+            <span class="checkoutLineItem__name">${escapeHTML(name)}</span>
+            <span class="checkoutLineItem__variant">${variantText ? escapeHTML(variantText) : t("selected_item")}</span>
+          </div>
+          <div class="checkoutLineItem__qty">× ${it.qty}</div>
+          <strong>${money(line)}</strong>
+        </div>
+      `;
+    }).join("");
 
     root.innerHTML = `
-      <div class="cardform cardform--wide">
-        <div class="checkoutHead">
-          <div>
-            <h2 class="checkoutTitle">${t("checkout_title")}</h2>
-            <p class="small checkoutSub">${t("checkout_terms")}</p>
-          </div>
-          <a class="btn btn--ghost" href="carrinho.html">${t("cart")}</a>
-        </div>
+      <div class="checkoutTransparent" data-checkout-transparent>
+        <aside class="checkoutBrandPanel" aria-label="${t("checkout_summary_label")}">
+          <div class="checkoutBrandPanel__sticky">
+            <div class="checkoutBrandPanel__top">
+              <a class="checkoutMiniBrand" href="index.html" aria-label="HEMP Store">
+                <span>HEMP</span><span>Store</span>
+              </a>
+              <span class="checkoutHeroBadge">${t("checkout_transparent_badge")}</span>
+            </div>
 
-        <div class="hr"></div>
+            <div class="checkoutHeroCopy">
+              <p class="checkoutEyebrow">${t("checkout_finalize_eyebrow")}</p>
+              <h1>${t("checkout_hero_title")}</h1>
+              <p>${t("checkout_hero_sub")}</p>
+            </div>
 
-        <div class="checkoutGrid">
-          <div class="checkoutMain">
-            <form id="checkoutForm" class="formgrid formgrid--1">
-              <div class="checkoutSection">
-                <div class="checkoutSection__head">
-                  <div class="stepdot">1</div>
-                  <h3 class="checkoutSection__title">${t("step1")}</h3>
-                </div>
-                <div class="formgrid">
-                  <div class="field">
-                    <div class="label">${t("first")}</div>
-                    <input class="input" name="first" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("last")}</div>
-                    <input class="input" name="last" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("email")}</div>
-                    <input class="input" name="email" required value="${user?.email || ""}" />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("phone")}</div>
-                    <input class="input" name="phone" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("doc")}</div>
-                    <input class="input" name="doc" required />
-                  </div>
-                </div>
-              </div>
+            <button class="checkoutSummaryToggle" type="button" id="checkoutSummaryToggle" aria-expanded="false" aria-controls="checkoutSummaryContent">
+              <span>${t("checkout_summary_toggle")}</span>
+              <strong id="mobileSummaryTotal">${money(totalsBase.total)}</strong>
+            </button>
 
-              <div class="checkoutSection">
-                <div class="checkoutSection__head">
-                  <div class="stepdot">2</div>
-                  <h3 class="checkoutSection__title">${t("step2")}</h3>
-                </div>
-                <div class="formgrid">
-                  <div class="field" style="grid-column:1/-1">
-                    <div class="label">${t("address1")}</div>
-                    <input class="input" name="address1" required />
+            <div class="checkoutSummaryContent" id="checkoutSummaryContent">
+              <div class="checkoutSummaryCard">
+                <div class="checkoutSummaryCard__head">
+                  <div>
+                    <div class="checkoutSummaryCard__eyebrow">${t("checkout_summary_label")}</div>
+                    <div class="checkoutSummaryCard__count">${totalQtyLabel}</div>
                   </div>
-                  <div class="field" style="grid-column:1/-1">
-                    <div class="label">${t("address2")}</div>
-                    <input class="input" name="address2" />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("city")}</div>
-                    <input class="input" name="city" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("state")}</div>
-                    <input class="input" name="state" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("zip")}</div>
-                    <input class="input" name="zip" required />
-                  </div>
-                  <div class="field">
-                    <div class="label">${t("country")}</div>
-                    <input class="input" name="country" required value="${t("country_default")}" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="checkoutSection">
-                <div class="checkoutSection__head">
-                  <div class="stepdot">3</div>
-                  <h3 class="checkoutSection__title">${t("step3")}</h3>
+                  <span class="checkoutSummaryCard__pill">${t("checkout_updated")}</span>
                 </div>
 
-                <div class="segwrap" role="group" aria-label="${t("shipping_method")}">
-                  <label class="seg">
-                    <input type="radio" name="ship" value="std" checked />
-                    <span class="seg__main">
-                      <span class="seg__title">${t("ship_std")}</span>
-                      <span class="seg__sub">+${money(7.90)}</span>
-                    </span>
-                  </label>
-                  <label class="seg">
-                    <input type="radio" name="ship" value="exp" />
-                    <span class="seg__main">
-                      <span class="seg__title">${t("ship_exp")}</span>
-                      <span class="seg__sub">+${money(14.90)}</span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div class="checkoutSection">
-                <div class="checkoutSection__head">
-                  <div class="stepdot">4</div>
-                  <h3 class="checkoutSection__title">${t("step4")}</h3>
+                <div class="checkoutLineItems">
+                  ${lineItems}
                 </div>
 
-                <div class="paychips" role="group" aria-label="${t("pay_method")}">
-                  <button class="chip" type="button" data-pay="btc">⚡ ${t("pay_btc")}</button>
-                  <button class="chip" type="button" data-pay="pix">${t("pay_pix")}</button>
-                  <button class="chip" type="button" data-pay="boleto">${t("pay_boleto")}</button>
-                  <button class="chip" type="button" data-pay="ted">${t("pay_ted")}</button>
-                  <button class="chip" type="button" data-pay="doc">${t("pay_doc")}</button>
-                  <button class="chip" type="button" data-pay="debit">💳 ${t("pay_debit")}</button>
-                  <button class="chip" type="button" data-pay="credit">💳 ${t("pay_credit")}</button>
+                <div class="checkoutTotalBox">
+                  <div class="checkoutTotalRow"><span>${t("subtotal")}</span><strong id="sumSubtotal">${money(totalsBase.subtotal)}</strong></div>
+                  <div class="checkoutTotalRow"><span id="sumShipLabel">${t("shipping")} · ${t("shipping_standard_label")}</span><strong id="sumShip">${money(totalsBase.shipping)}</strong></div>
+                  <div class="checkoutTotalRow"><span>${t("fees")}</span><strong id="sumTax">${money(totalsBase.tax)}</strong></div>
+                  <div class="checkoutTotalDivider"></div>
+                  <div class="checkoutTotalRow checkoutTotalRow--big"><span>${t("total")}</span><strong id="sumTotal">${money(totalsBase.total)}</strong></div>
                 </div>
 
-                <div class="field" style="margin-top:10px">
-                  <div class="label">${t("pay_method")}</div>
-                  <select class="select" name="pay" id="paySelect">
-                    <option value="btc">${t("pay_btc")}</option>
-                    <option value="pix">${t("pay_pix")}</option>
-                    <option value="boleto">${t("pay_boleto")}</option>
-                    <option value="ted">${t("pay_ted")}</option>
-                    <option value="doc">${t("pay_doc")}</option>
-                    <option value="debit">${t("pay_debit")}</option>
-                    <option value="credit">${t("pay_credit")}</option>
-                  </select>
+                <div class="checkoutTrustRow">
+                  <span>🔒 SSL</span>
+                  <span>Mercado Pago</span>
+                  <span>PayPal</span>
                 </div>
-
-                <div id="payHint" class="small checkoutHint"></div>
-                <div id="payDetails" class="paybox" aria-live="polite"></div>
-              </div>
-
-              <div class="checkoutSticky">
-                <button class="btn btn--primary btn--wide" type="submit">${t("place_order")}</button>
-              </div>
-            </form>
-          </div>
-
-          <aside class="checkoutAside">
-            <div class="asideCard">
-              <div class="asideTitle">${t("step5")}</div>
-              <div class="small asideSub">${t("order_summary")}</div>
-              <div class="hr"></div>
-
-              <div class="asideItems small">
-                ${cart.map(it=>{
-                  const p = findProduct(it.productId);
-                  const name = p ? getProductName(p) : it.productId;
-                  const v = it.variant || {};
-                  const variantText = Object.values(v).filter(Boolean).map(x=>optionLabel(x)).join(" • ");
-                  const line = (p ? getVariantPrice(p, v) : 0) * it.qty;
-                  return `
-                    <div class="asideItem">
-                      <div class="asideItem__name">
-                        <div>${name}</div>
-                        <div class="small muted">${variantText ? `(${variantText})` : ""}</div>
-                      </div>
-                      <div class="asideItem__meta">× ${it.qty}</div>
-                      <div class="asideItem__price"><strong>${money(line)}</strong></div>
-                    </div>
-                  `;
-                }).join("")}
-              </div>
-
-              <div class="hr"></div>
-              <div class="totals">
-                <div class="totals__row"><span>${t("subtotal")}</span><strong id="sumSubtotal">${money(totalsBase.subtotal)}</strong></div>
-                <div class="totals__row"><span>${t("shipping")}</span><strong id="sumShip">${money(totalsBase.shipping)}</strong></div>
-                <div class="totals__row"><span>${t("tax")}</span><strong id="sumTax">${money(totalsBase.tax)}</strong></div>
-                <div class="hr"></div>
-                <div class="totals__row totals__row--big"><span>${t("total")}</span><strong id="sumTotal">${money(totalsBase.total)}</strong></div>
-              </div>
-
-              <div class="asideBadges">
-                <span class="pill">🔒 ${t("no_chargeback")}</span>
-                <span class="pill">🧾 Invoice</span>
               </div>
             </div>
-          </aside>
-        </div>
+          </div>
+        </aside>
+
+        <section class="checkoutPaymentPanel" aria-label="${t("payment_details_aria")}">
+          <form id="checkoutForm" class="transparentForm" autocomplete="on">
+            <div class="walletButtons" role="group" aria-label="${t("payment_providers")}">
+              <button class="walletButton walletButton--mp walletButton--active" type="button" data-pay="mp_pix" aria-pressed="true">
+                <span class="walletButton__mark">MP</span>
+                <span>Mercado Pago</span>
+              </button>
+              <button class="walletButton walletButton--paypal" type="button" data-pay="paypal" aria-pressed="false">
+                <span class="walletButton__mark">P</span>
+                <span>PayPal</span>
+              </button>
+            </div>
+
+            <div class="checkoutOr"><span>${t("or")}</span></div>
+
+            <div class="transparentForm__head">
+              <h2>${t("payment_details_title")}</h2>
+              <p>${t("payment_details_sub")}</p>
+            </div>
+
+            <input type="hidden" name="pay" id="paySelect" value="mp_pix" />
+
+            <div class="transparentSection">
+              <div class="transparentSection__title">${t("customer_data")}</div>
+              <div class="formgrid formgrid--transparent">
+                <div class="field" style="grid-column:1/-1">
+                  <div class="label">${t("email")}</div>
+                  <input class="input input--transparent" name="email" type="email" required placeholder="voce@email.com" value="${userEmail}" />
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <div class="label">${t("full_name")}</div>
+                  <input class="input input--transparent" name="fullName" required placeholder="${t("full_name_ph")}" />
+                </div>
+                <div class="field">
+                  <div class="label">${t("doc")}</div>
+                  <input class="input input--transparent" name="doc" required inputmode="numeric" placeholder="000.000.000-00" />
+                </div>
+                <div class="field">
+                  <div class="label">${t("phone")}</div>
+                  <input class="input input--transparent" name="phone" required inputmode="tel" placeholder="(00) 00000-0000" />
+                </div>
+              </div>
+            </div>
+
+            <div class="transparentSection">
+              <div class="transparentSection__title">${t("delivery_title")}</div>
+              <div class="formgrid formgrid--transparent">
+                <div class="field" style="grid-column:1/-1">
+                  <div class="label">${t("address1")}</div>
+                  <input class="input input--transparent" name="address1" required placeholder="${t("address1_ph")}" />
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <div class="label">${t("address2")}</div>
+                  <input class="input input--transparent" name="address2" placeholder="${t("address2_ph")}" />
+                </div>
+                <div class="field">
+                  <div class="label">${t("city")}</div>
+                  <input class="input input--transparent" name="city" required />
+                </div>
+                <div class="field">
+                  <div class="label">${t("state")}</div>
+                  <input class="input input--transparent" name="state" required maxlength="2" placeholder="SP" />
+                </div>
+                <div class="field">
+                  <div class="label">${t("zip")}</div>
+                  <input class="input input--transparent" name="zip" required inputmode="numeric" placeholder="00000-000" />
+                </div>
+                <div class="field">
+                  <div class="label">${t("country")}</div>
+                  <input class="input input--transparent" name="country" required value="${t("country_default")}" />
+                </div>
+              </div>
+
+              <div class="deliverySwitch" role="group" aria-label="${t("shipping_method")}">
+                <label class="deliveryOption">
+                  <input type="radio" name="ship" value="std" checked />
+                  <span><strong>${t("ship_std")}</strong><small>+${money(7.90)}</small></span>
+                </label>
+                <label class="deliveryOption">
+                  <input type="radio" name="ship" value="exp" />
+                  <span><strong>${t("ship_exp")}</strong><small>+${money(14.90)}</small></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="transparentSection transparentSection--payment">
+              <div class="transparentSection__title">${t("payment_method_title")}</div>
+              <div class="paymentList" role="radiogroup" aria-label="${t("pay_method")}">
+                <label class="paymentOption paymentOption--active" data-method="mp_pix">
+                  <input type="radio" name="payOption" value="mp_pix" checked />
+                  <span class="paymentOption__icon">◆</span>
+                  <span class="paymentOption__body">
+                    <strong>Pix</strong>
+                    <small>${t("pay_pix_desc")}</small>
+                  </span>
+                  <span class="paymentOption__tag">BRL</span>
+                </label>
+
+                <label class="paymentOption" data-method="mp_card">
+                  <input type="radio" name="payOption" value="mp_card" />
+                  <span class="paymentOption__icon">▰</span>
+                  <span class="paymentOption__body">
+                    <strong>${t("pay_card_name")}</strong>
+                    <small>${t("pay_card_desc")}</small>
+                  </span>
+                  <span class="paymentOption__cards">VISA MC AMEX</span>
+                </label>
+
+                <label class="paymentOption" data-method="mp_boleto">
+                  <input type="radio" name="payOption" value="mp_boleto" />
+                  <span class="paymentOption__icon">☰</span>
+                  <span class="paymentOption__body">
+                    <strong>Boleto</strong>
+                    <small>${t("pay_boleto_desc")}</small>
+                  </span>
+                </label>
+
+                <label class="paymentOption" data-method="paypal">
+                  <input type="radio" name="payOption" value="paypal" />
+                  <span class="paymentOption__icon">P</span>
+                  <span class="paymentOption__body">
+                    <strong>PayPal</strong>
+                    <small>${t("pay_paypal_desc")}</small>
+                  </span>
+                </label>
+
+                <label class="paymentOption" data-method="btc">
+                  <input type="radio" name="payOption" value="btc" />
+                  <span class="paymentOption__icon">₿</span>
+                  <span class="paymentOption__body">
+                    <strong>${t("pay_crypto_name")}</strong>
+                    <small>${t("pay_crypto_desc")}</small>
+                  </span>
+                </label>
+              </div>
+
+              <div id="payHint" class="checkoutMethodHint" aria-live="polite"></div>
+              <div id="payDetails" class="paybox paybox--transparent" aria-live="polite"></div>
+            </div>
+
+            <button class="btn btn--primary btn--wide checkoutPayButton" id="placeOrderBtn" type="submit">${t("reveal_qr")}</button>
+            <p class="transparentFinePrint">${t("checkout_fine_print")}</p>
+          </form>
+        </section>
       </div>
     `;
 
@@ -4919,43 +5565,51 @@ function renderProductPage(){
     const shipInputs = root.querySelectorAll('input[name="ship"]');
     const payHint = root.querySelector("#payHint");
     const payDetails = root.querySelector("#payDetails");
+    const payButton = root.querySelector("#placeOrderBtn");
 
     const sumShip = root.querySelector("#sumShip");
     const sumTotal = root.querySelector("#sumTotal");
     const sumSubtotal = root.querySelector("#sumSubtotal");
     const sumTax = root.querySelector("#sumTax");
+    const sumShipLabel = root.querySelector("#sumShipLabel");
+    const mobileSummaryTotal = root.querySelector("#mobileSummaryTotal");
+    const summaryToggle = root.querySelector("#checkoutSummaryToggle");
+    const summaryContent = root.querySelector("#checkoutSummaryContent");
 
-    const chips = root.querySelectorAll(".chip[data-pay]");
-    function syncChips(){
-      chips.forEach(ch=>{
-        const isOn = ch.dataset.pay === paySel.value;
-        ch.classList.toggle("chip--on", isOn);
-        if(isOn) ch.setAttribute("aria-pressed","true"); else ch.setAttribute("aria-pressed","false");
-      });
-    }
-    chips.forEach(ch=>{
-      ch.addEventListener("click", ()=>{
-        paySel.value = ch.dataset.pay;
-        paySel.dispatchEvent(new Event("change"));
-        syncChips();
-      });
-    });
+    const walletButtons = root.querySelectorAll(".walletButton[data-pay]");
+    const payOptions = root.querySelectorAll(".paymentOption[data-method]");
+    const payRadios = root.querySelectorAll('input[name="payOption"]');
 
     function getShip(){
       const el = form.querySelector('input[name="ship"]:checked');
       return el ? el.value : "std";
     }
 
-    function recalc(){
+    function getCheckoutTotals(){
       const ship = getShip();
       const subtotal = totalsBase.subtotal;
       const shipping = ship === "exp" ? 14.90 : 7.90;
       const tax = subtotal > 0 ? subtotal * 0.06 : 0;
       const total = subtotal + shipping + tax;
-      sumSubtotal.textContent = money(subtotal);
-      sumShip.textContent = money(shipping);
-      sumTax.textContent = money(tax);
-      sumTotal.textContent = money(total);
+      return { subtotal, shipping, tax, total };
+    }
+
+    function recalc(){
+      const totals = getCheckoutTotals();
+      const ship = getShip();
+      const shipLabel = ship === "exp" ? `${t("shipping")} · ${t("shipping_express_label")}` : `${t("shipping")} · ${t("shipping_standard_label")}`;
+      sumSubtotal.textContent = money(totals.subtotal);
+      sumShip.textContent = money(totals.shipping);
+      sumTax.textContent = money(totals.tax);
+      sumTotal.textContent = money(totals.total);
+      if(sumShipLabel) sumShipLabel.textContent = shipLabel;
+      if(mobileSummaryTotal) mobileSummaryTotal.textContent = money(totals.total);
+    }
+
+    function setSummaryExpanded(expanded){
+      if(!summaryToggle || !summaryContent) return;
+      summaryToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      summaryContent.classList.toggle("is-open", expanded);
     }
 
     function randDigits(n){
@@ -4965,15 +5619,13 @@ function renderProductPage(){
     }
 
     function makeDemoLightningInvoice(totalUsd){
-      // Demo invoice (NOT valid on the real Lightning Network).
-      // Replace by integrating BTCPay Server / LNURL in production.
       const amount = Math.max(1, Math.round(totalUsd*100));
       return `lnbc${amount}n1p${randDigits(12)}${randDigits(12)}${randDigits(12)}`;
     }
 
     function makeDemoPix(){
       const key = `hempstore+${randDigits(6)}@pix.demo`;
-      const payload = `00020126580014BR.GOV.BCB.PIX0136${key}5204000053039865802BR5920HEMP STORE DEMO6009SAO PAULO62130509HEMP${randDigits(4)}6304${randDigits(4)}`;
+      const payload = `00020126580014BR.GOV.BCB.PIX0136${key}5204000053039865802BR5920HEMP STORE6009SAO PAULO62130509HEMP${randDigits(4)}6304${randDigits(4)}`;
       return { key, payload };
     }
 
@@ -4982,170 +5634,193 @@ function renderProductPage(){
       return { code };
     }
 
-    function makeDemoBank(){
-      return {
-        bank:"Banco Demo 999",
-        agency:`${randDigits(4)}-${randDigits(1)}`,
-        account:`${randDigits(6)}-${randDigits(1)}`,
-        holder:"HEMP STORE S.A.",
-        doc:"00.000.000/0001-00"
-      };
+    function providerForMethod(method){
+      if(method === "paypal") return "paypal";
+      if(method === "btc") return "mock";
+      return "mercadopago";
+    }
+
+    function backendMethodFor(method){
+      return ({ mp_pix:"pix", mp_card:"credit", mp_boleto:"boleto", paypal:"paypal", btc:"btc" }[method]) || method;
+    }
+
+    function setPaymentMethod(method){
+      paySel.value = method;
+
+      payRadios.forEach(r=>{ r.checked = (r.value === method); });
+      payOptions.forEach(opt=>{
+        opt.classList.toggle("paymentOption--active", opt.dataset.method === method);
+      });
+      walletButtons.forEach(btn=>{
+        const active = (btn.dataset.pay === method) || (method.startsWith("mp_") && btn.dataset.pay === "mp_pix");
+        btn.classList.toggle("walletButton--active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+
+      renderPaymentDetails();
+    }
+
+    walletButtons.forEach(btn=>{
+      btn.addEventListener("click", ()=>setPaymentMethod(btn.dataset.pay));
+    });
+    payRadios.forEach(r=>{
+      r.addEventListener("change", ()=>setPaymentMethod(r.value));
+    });
+    payOptions.forEach(opt=>{
+      opt.addEventListener("click", ()=>setPaymentMethod(opt.dataset.method));
+    });
+
+    function wireCopyButtons(){
+      payDetails.querySelectorAll("[data-copy]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const target = payDetails.querySelector(btn.getAttribute("data-copy"));
+          const text = target ? (target.value || target.textContent || "") : "";
+          try{ await navigator.clipboard.writeText(text); }
+          catch(err){ if(target && target.select){ target.focus(); target.select(); } }
+          const old = btn.textContent;
+          btn.textContent = t("copied");
+          setTimeout(()=>{ btn.textContent = old; }, 1400);
+        });
+      });
     }
 
     function renderPaymentDetails(){
-      const ship = getShip();
-      const subtotal = totalsBase.subtotal;
-      const shipping = ship === "exp" ? 14.90 : 7.90;
-      const tax = subtotal > 0 ? subtotal * 0.06 : 0;
-      const total = subtotal + shipping + tax;
-
       const method = paySel.value;
-      if(method === "btc"){
-        // Keep checkout clean: no extra Lightning "receive" notices.
-        payHint.textContent = "";
-        const invoice = makeDemoLightningInvoice(total);
-        payDetails.innerHTML = `
-          <div class="paybox__grid">
-            <div>
-              <div class="paybox__title">${t("invoice_title")}</div>
-              <div class="small">${t("pay_btc")}</div>
-            </div>
-            <div class="paybox__panel">
-              <div class="label" style="margin-bottom:6px">${t("invoice_label")}</div>
-              <textarea class="input paybox__invoice" readonly>${invoice}</textarea>
-              <div class="paybox__actions">
-                <button type="button" class="btn btn--ghost" id="copyInvoice">${t("invoice_copy")}</button>
-                <a class="btn btn--primary" href="lightning:${invoice}">${t("open_wallet")}</a>
+      const totals = getCheckoutTotals();
+      const provider = providerForMethod(method);
+      const providerName = provider === "paypal" ? "PayPal" : provider === "mercadopago" ? "Mercado Pago" : "Lightning";
+
+      let html = "";
+      if(method === "mp_pix"){
+        const pix = makeDemoPix();
+        payHint.textContent = t("payhint_pix");
+        if(payButton) payButton.textContent = t("reveal_qr");
+        html = `
+          <div class="transparentPayDetail transparentPayDetail--pix">
+            <div class="qrPreview" aria-label="${t("qr_pix_preview")}"></div>
+            <div class="transparentPayDetail__content">
+              <strong>${t("pix_detail_title")}</strong>
+              <p>${t("pix_detail_body")}</p>
+              <div class="paymentMiniRows">
+                <span>${t("subtotal")}</span><strong>${money(totals.subtotal)}</strong>
+                <span>${t("estimated_fees")}</span><strong>${money(totals.tax)}</strong>
+                <span>${t("amount_due")}</span><strong>${money(totals.total)}</strong>
               </div>
-              <div class="small" id="copyStatus" aria-live="polite"></div>
+              <textarea class="input input--transparent paybox__invoice" id="pixPayload" readonly>${pix.payload}</textarea>
+              <button class="btn btn--ghost" type="button" data-copy="#pixPayload">${t("copy_pix")}</button>
+            </div>
+          </div>
+        `;
+      } else if(method === "mp_card"){
+        payHint.textContent = t("payhint_card");
+        if(payButton) payButton.textContent = t("pay_button_card");
+        html = `
+          <div class="transparentCardFields">
+            <div class="field" style="grid-column:1/-1">
+              <div class="label">${t("card_name")}</div>
+              <input class="input input--transparent" name="cardName" placeholder="${t("card_name_ph")}" />
+            </div>
+            <div class="field" style="grid-column:1/-1">
+              <div class="label">${t("card_number")}</div>
+              <input class="input input--transparent" name="cardNumber" inputmode="numeric" placeholder="0000 0000 0000 0000" />
+            </div>
+            <div class="field">
+              <div class="label">${t("card_exp")}</div>
+              <input class="input input--transparent" name="cardExp" inputmode="numeric" placeholder="MM/AA" />
+            </div>
+            <div class="field">
+              <div class="label">${t("card_cvv")}</div>
+              <input class="input input--transparent" name="cardCvv" inputmode="numeric" placeholder="CVV" />
+            </div>
+            <div class="field" style="grid-column:1/-1">
+              <div class="label">${t("card_installments")}</div>
+              <select class="select select--transparent" name="installments">
+                <option>1x ${t("installment_of")} ${money(totals.total)}</option>
+                <option>2x</option><option>3x</option><option>6x</option><option>12x</option>
+              </select>
+            </div>
+          </div>
+        `;
+      } else if(method === "mp_boleto"){
+        const boleto = makeDemoBoleto();
+        payHint.textContent = t("payhint_boleto");
+        if(payButton) payButton.textContent = t("pay_button_boleto");
+        html = `
+          <div class="transparentPayDetail">
+            <div class="transparentPayDetail__content transparentPayDetail__content--full">
+              <strong>${t("boleto_detail_title")}</strong>
+              <p>${t("boleto_detail_body")}</p>
+              <textarea class="input input--transparent paybox__invoice" id="boletoCode" readonly>${boleto.code}</textarea>
+              <button class="btn btn--ghost" type="button" data-copy="#boletoCode">${t("copy_code")}</button>
+            </div>
+          </div>
+        `;
+      } else if(method === "paypal"){
+        payHint.textContent = t("payhint_paypal");
+        if(payButton) payButton.textContent = t("pay_button_paypal");
+        html = `
+          <div class="transparentPayDetail transparentPayDetail--paypal">
+            <div class="paypalMark">PayPal</div>
+            <div class="transparentPayDetail__content">
+              <strong>${t("paypal_detail_title")}</strong>
+              <p>${t("paypal_detail_body")}</p>
+              <div class="paymentMiniRows">
+                <span>${t("authorized_total")}</span><strong>${money(totals.total)}</strong>
+                <span>${t("initial_status")}</span><strong>${t("pending")}</strong>
+              </div>
             </div>
           </div>
         `;
       } else {
-        payHint.textContent = (method === "credit" || method === "debit") ? t("pay_hint_card") : t("pay_hint_fiat");
-        const bank = makeDemoBank();
-        const pix = makeDemoPix();
-        const boleto = makeDemoBoleto();
-
-        let fiatBlock = "";
-        if(method === "credit" || method === "debit"){
-          fiatBlock = `
-            <div class="paybox__panel">
-              <div class="paybox__title">${t("fiat_title")} — ${method === "debit" ? t("pay_debit") : t("pay_credit")}</div>
-              ${t("card_demo_note") ? `<div class="small" style="margin-bottom:10px">${t("card_demo_note")}</div>` : ""}
-              <div class="formgrid">
-                <div class="field" style="grid-column:1/-1">
-                  <div class="label">${t("card_name")}</div>
-                  <input class="input" placeholder="${t("card_name_ph")}" />
-                </div>
-                <div class="field" style="grid-column:1/-1">
-                  <div class="label">${t("card_number")}</div>
-                  <input class="input" inputmode="numeric" placeholder="0000 0000 0000 0000" />
-                </div>
-                <div class="field">
-                  <div class="label">${t("card_exp")}</div>
-                  <input class="input" inputmode="numeric" placeholder="MM/AA" />
-                </div>
-                <div class="field">
-                  <div class="label">${t("card_cvv")}</div>
-                  <input class="input" inputmode="numeric" placeholder="CVV" />
-                </div>
-                <div class="field" style="grid-column:1/-1">
-                  <div class="label">${t("card_installments")}</div>
-                  <select class="select">
-                    <option>1x</option><option>2x</option><option>3x</option><option>6x</option><option>12x</option>
-                  </select>
-                </div>
+        const invoice = makeDemoLightningInvoice(totals.total);
+        payHint.textContent = t("payhint_btc");
+        if(payButton) payButton.textContent = t("pay_button_btc");
+        html = `
+          <div class="transparentPayDetail">
+            <div class="transparentPayDetail__content transparentPayDetail__content--full">
+              <strong>${t("btc_detail_title")}</strong>
+              <p>${t("btc_detail_body")}</p>
+              <textarea class="input input--transparent paybox__invoice" id="lnInvoice" readonly>${invoice}</textarea>
+              <div class="paybox__actions">
+                <button class="btn btn--ghost" type="button" data-copy="#lnInvoice">${t("invoice_copy")}</button>
+                <a class="btn btn--primary" href="lightning:${invoice}">${t("open_wallet")}</a>
               </div>
             </div>
-          `;
-        } else if(method === "pix"){
-          fiatBlock = `
-            <div class="paybox__panel">
-              <div class="paybox__title">${t("fiat_title")} — ${t("pay_pix")}</div>
-              <div class="field">
-                <div class="label">${t("fiat_pix_key")}</div>
-                <input class="input" value="${pix.key}" readonly />
-              </div>
-              <div class="field">
-                <div class="label">${t("fiat_pix_payload")}</div>
-                <textarea class="input paybox__invoice" readonly>${pix.payload}</textarea>
-              </div>
-            </div>
-          `;
-        } else if(method === "boleto"){
-          fiatBlock = `
-            <div class="paybox__panel">
-              <div class="paybox__title">${t("fiat_title")} — ${t("pay_boleto")}</div>
-              <div class="field">
-                <div class="label">${t("fiat_boleto_code")}</div>
-                <textarea class="input paybox__invoice" readonly>${boleto.code}</textarea>
-              </div>
-              ${t("boleto_demo_note") ? `<div class="small">${t("boleto_demo_note")}</div>` : ""}
-            </div>
-          `;
-        } else {
-          fiatBlock = `
-            <div class="paybox__panel">
-              <div class="paybox__title">${t("fiat_title")} — ${method.toUpperCase()}</div>
-              ${t("bank_transfer_demo_note") ? `<div class="small" style="margin-bottom:10px">${t("bank_transfer_demo_note")}</div>` : ""}
-              <div class="formgrid">
-                <div class="field">
-                  <div class="label">${t("fiat_bank_name")}</div>
-                  <input class="input" value="${bank.bank}" readonly />
-                </div>
-                <div class="field">
-                  <div class="label">${t("fiat_agency")}</div>
-                  <input class="input" value="${bank.agency}" readonly />
-                </div>
-                <div class="field">
-                  <div class="label">${t("fiat_account")}</div>
-                  <input class="input" value="${bank.account}" readonly />
-                </div>
-                <div class="field">
-                  <div class="label">${t("fiat_holder")}</div>
-                  <input class="input" value="${bank.holder}" readonly />
-                </div>
-                <div class="field" style="grid-column:1/-1">
-                  <div class="label">${t("fiat_cnpj")}</div>
-                  <input class="input" value="${bank.doc}" readonly />
-                </div>
-              </div>
-            </div>
-          `;
-        }
-
-        // For non-BTC methods, keep the UI focused on the selected BRL/card method.
-        // (No extra Lightning invoice / receive notices.)
-        payDetails.innerHTML = `
-          <div class="paybox__grid">
-            ${fiatBlock}
           </div>
         `;
       }
 
-      const copyBtn = payDetails.querySelector("#copyInvoice");
-      const copyStatus = payDetails.querySelector("#copyStatus");
-      if(copyBtn){
-        copyBtn.addEventListener("click", async ()=>{
-          const ta = payDetails.querySelector("textarea.paybox__invoice");
-          const text = ta ? ta.value : "";
-          try{
-            await navigator.clipboard.writeText(text);
-            if(copyStatus) copyStatus.textContent = t("invoice_copied");
-          } catch(err){
-            if(ta){ ta.focus(); ta.select(); }
-            if(copyStatus) copyStatus.textContent = t("invoice_copied");
-          }
-        });
-      }
+      payDetails.innerHTML = html;
+      payDetails.setAttribute("data-provider", providerName);
+      wireCopyButtons();
     }
 
     shipInputs.forEach(r=>r.addEventListener("change", ()=>{ recalc(); renderPaymentDetails(); }));
-    paySel.addEventListener("change", ()=>{ renderPaymentDetails(); syncChips(); });
     recalc();
     renderPaymentDetails();
-    syncChips();
+    setPaymentMethod("mp_pix");
+
+    if(summaryToggle && summaryContent){
+      let mobileWasCollapsed = false;
+      const syncSummaryLayout = ()=>{
+        if(window.innerWidth <= 700){
+          if(!mobileWasCollapsed){
+            setSummaryExpanded(false);
+            mobileWasCollapsed = true;
+          }
+        } else {
+          setSummaryExpanded(true);
+          mobileWasCollapsed = false;
+        }
+      };
+      syncSummaryLayout();
+      summaryToggle.addEventListener("click", ()=>{
+        if(window.innerWidth > 700) return;
+        const expanded = summaryToggle.getAttribute("aria-expanded") === "true";
+        setSummaryExpanded(!expanded);
+      });
+      window.addEventListener("resize", syncSummaryLayout);
+    }
 
     form.addEventListener("submit", async (e)=>{
       e.preventDefault();
@@ -5153,7 +5828,6 @@ function renderProductPage(){
       const user = getUser();
       const tok = getToken();
       if(!user || !tok){
-        // Save return URL and ask user to login
         try{ localStorage.setItem("hemp_return_after_login", location.href); }catch{}
         location.href = "login.html";
         return;
@@ -5167,17 +5841,20 @@ function renderProductPage(){
       }
 
       const fd = new FormData(form);
-      const first = String(fd.get("first")||"").trim();
-      const last  = String(fd.get("last")||"").trim();
+      const fullName = String(fd.get("fullName")||"").trim();
+      const nameParts = fullName.split(/\s+/).filter(Boolean);
+      const first = nameParts.shift() || "Cliente";
+      const last  = nameParts.join(" ") || "HEMP Store";
       const phone = String(fd.get("phone")||"").trim();
+      const email = String(fd.get("email")||user.email||"").trim();
+      const doc = String(fd.get("doc")||"").trim();
       const address1 = String(fd.get("address1")||"").trim();
       const address2 = String(fd.get("address2")||"").trim();
       const city = String(fd.get("city")||"").trim();
       const state = String(fd.get("state")||"").trim().toUpperCase();
       const zipRaw = String(fd.get("zip")||"").trim();
-      const method = String(fd.get("pay")||paySel.value||"pix");
+      const method = String(fd.get("pay")||paySel.value||"mp_pix");
 
-      // Parse street + number from address1 (best effort)
       let street = address1, number = "s/n";
       const m = address1.match(/^(.*?)[,\s]+(\d+[\w\-\/]*)\s*$/);
       if(m){ street = m[1].trim() || street; number = m[2].trim() || number; }
@@ -5186,7 +5863,7 @@ function renderProductPage(){
 
       const addressPayload = {
         label: "Entrega",
-        recipient: `${first} ${last}`.trim() || (user.email || "Cliente"),
+        recipient: `${first} ${last}`.trim() || (email || user.email || "Cliente"),
         phone: phone || undefined,
         street: street || "Rua",
         number,
@@ -5194,16 +5871,17 @@ function renderProductPage(){
         district: "Centro",
         city: city || "Cidade",
         state: (state && state.length===2) ? state : "SP",
-        zip: zip || "00000000"
+        zip: zip || "00000000",
+        document: doc || undefined,
+        email: email || undefined
       };
 
-      const provider = (method === "btc") ? "mock" : "mercadopago";
+      const provider = providerForMethod(method);
+      const clientPaymentMethod = backendMethodFor(method);
 
       try{
-        // 1) Create address
         const addr = await apiFetch("/addresses", { method:"POST", body: JSON.stringify(addressPayload) });
 
-        // 2) Create checkout
         const items = cartNow.map(i=>({ sku: i.productId, quantity: i.qty }));
         const chk = await apiFetch("/checkout", {
           method:"POST",
@@ -5211,22 +5889,28 @@ function renderProductPage(){
             addressId: addr.id,
             items,
             paymentProvider: provider,
-            clientPaymentMethod: method
+            clientPaymentMethod,
+            gatewayMode: "transparent"
           })
         });
 
-        // 3) For fiat, redirect to provider checkout
-        if(provider === "mercadopago" && chk.checkoutUrl){
-          location.href = chk.checkoutUrl;
+        const checkoutUrl = chk.checkoutUrl || chk.approvalUrl || chk.redirectUrl || chk.initPoint;
+        if((provider === "mercadopago" || provider === "paypal") && checkoutUrl){
+          location.href = checkoutUrl;
           return;
         }
 
-        // 4) Mock flow: auto-approve payment and go to success
+        if(provider !== "mock" && chk.orderId){
+          setCart([]);
+          location.href = `checkout-pending.html?orderId=${encodeURIComponent(chk.orderId)}`;
+          return;
+        }
+
         await apiFetch(`/webhooks/mock/approve?orderId=${encodeURIComponent(chk.orderId)}`, { method:"POST" });
         setCart([]);
         location.href = `checkout-success.html?orderId=${encodeURIComponent(chk.orderId)}`;
       }catch(err){
-        alert((err && err.message) ? err.message : "Falha ao finalizar o pedido.");
+        alert((err && err.message) ? err.message : t("checkout_fail"));
       }
     });
   }
@@ -5265,7 +5949,7 @@ function renderProductPage(){
           root.innerHTML = `
             <div class="cardform">
               <h2 style="margin:0 0 8px">${t("my_orders")}</h2>
-              <p class="small">Nenhum pedido encontrado.</p>
+              <p class="small">${t("no_orders")}</p>
               <div class="hr"></div>
               <a class="btn btn--primary" href="produtos.html">${t("products")}</a>
             </div>
@@ -5309,7 +5993,7 @@ function renderProductPage(){
         root.innerHTML = `
           <div class="cardform">
             <h2 style="margin:0 0 8px">${t("my_orders")}</h2>
-            <p class="small">Falha ao carregar pedidos: ${escapeHTML(err?.message||"")}</p>
+            <p class="small">${t("orders_load_fail")} ${escapeHTML(err?.message||"")}</p>
           </div>
         `;
       });
@@ -5472,5 +6156,6 @@ function mountProductBackNav(){
     mountSmartFooter();
     initFooterSearch();
     mountNewsletter();
+    refreshDailyRates({ force:false });
   })();
   
