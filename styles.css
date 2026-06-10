@@ -5274,3 +5274,112 @@ body[data-site="hoc"] .hocCard__photo{
     white-space:normal;
   }
 }
+
+/* ===== v11: home promo mobile symmetry correction ===== */
+@media(max-width:900px){
+  .homePromo{
+    padding-top:14px !important;
+    padding-bottom:clamp(22px, 6vw, 38px) !important;
+  }
+  .homePromo + .featured{
+    padding-top:22px !important;
+  }
+  .homePromoCard{
+    min-height:clamp(660px, 116vw, 748px) !important;
+  }
+  .homePromoCard.is-mobile-sized{
+    height:var(--promo-mobile-height) !important;
+    min-height:0 !important;
+  }
+  .homePromoSlide{
+    padding:28px 24px 92px !important;
+    gap:14px !important;
+    align-content:start !important;
+    align-items:start !important;
+  }
+  .homePromoSlide__media{
+    margin-bottom:2px !important;
+  }
+  .homePromoSlide__actions{
+    margin-top:20px !important;
+    padding-bottom:0 !important;
+  }
+  .homePromoCard__dots{
+    bottom:20px !important;
+    padding:9px 14px !important;
+  }
+}
+
+@media(max-width:520px){
+  .homePromo{
+    padding-top:12px !important;
+    padding-bottom:28px !important;
+  }
+  .homePromo + .featured{
+    padding-top:18px !important;
+  }
+  .homePromoCard{
+    min-height:680px !important;
+    border-radius:26px !important;
+  }
+  .homePromoCard.is-mobile-sized{
+    height:var(--promo-mobile-height) !important;
+    min-height:0 !important;
+  }
+  .homePromoSlide{
+    padding:22px 18px 86px !important;
+    gap:14px !important;
+  }
+  .homePromoSlide__media{
+    height:clamp(190px, 52vw, 220px) !important;
+    min-height:clamp(190px, 52vw, 220px) !important;
+    padding:16px !important;
+    border-radius:22px !important;
+  }
+  .homePromoSlide__eyebrow{
+    margin-bottom:8px !important;
+  }
+  .homePromoSlide__title{
+    margin-bottom:14px !important;
+  }
+  .homePromoSlide__text{
+    line-height:1.45 !important;
+  }
+  .homePromoSlide__actions{
+    gap:12px !important;
+    margin-top:18px !important;
+    padding-bottom:0 !important;
+  }
+  .homePromoSlide__actions .btn,
+  .homePromoSlide__badge{
+    min-height:52px !important;
+    width:100% !important;
+    justify-content:center !important;
+  }
+  .homePromoCard__btn{
+    top:30% !important;
+  }
+  .homePromoCard__dots{
+    bottom:18px !important;
+  }
+}
+
+@media(max-width:380px){
+  .homePromoCard{
+    min-height:700px !important;
+  }
+  .homePromoCard.is-mobile-sized{
+    height:var(--promo-mobile-height) !important;
+    min-height:0 !important;
+  }
+  .homePromoSlide{
+    padding:20px 16px 84px !important;
+  }
+  .homePromoSlide__media{
+    height:185px !important;
+    min-height:185px !important;
+  }
+  .homePromoSlide__title{
+    font-size:clamp(33px, 10.2vw, 46px) !important;
+  }
+}
